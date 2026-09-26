@@ -7,6 +7,13 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.1.0 - 2026-09-26
+
+Spec revision 17, on the developer's ok of 2026-09-26. Adds a record kind; earlier logs still read.
+
+- `sudus retire <item>... --quote "<their words>"` records the developer's words for items they dropped (issue #34). Nothing closed a next-feature item: `sudus promote` refuses one and a retire escalation takes only backlog items, so every later next-feature pass offered it again, even after the developer dropped it or a spec change answered it. A backlog item the developer had already dropped in conversation still needed an escalation and a second ok. One command now retires any number of backlog or next-feature items in a new `retirement` record that carries the developer's evidence. A retired item is never promoted, wake stops naming its promotion, `sudus show items` marks it retired, and the next-feature skill no longer offers it. A defect is fixed, not retired, and a promoted item is not retired. The retire escalation for backlog items is unchanged; its refusal of a next-feature item now names `sudus retire`.
+- The agent captures a next-feature item only for a change the developer asked for or one a real bug needs, never for an edge case or a ceremony step. The working agreement template, the existing-project skill, the manual and the spec say so.
+
 ## 4.0.2 - 2026-09-25
 
 - The brief names each requirement's current receipt, not its newest (issue #33). A violating example checked after the fix and then restored left a fail receipt newer than the current pass, so the brief's Receipts section told the adversary the requirement failed while wake held the pass current. The brief now names the receipt current at the workspace, the one wake decides with, and lists a newer receipt that is not current as "not current".
