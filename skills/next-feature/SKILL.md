@@ -16,10 +16,10 @@ disable-model-invocation: true
 Stop and hand the verdict to AGENTS.md. Anything else is the loop's.
 
 ### `read`
-Read the spec set, the finished roadmap section, the Consequential queue (`sudus decisions`), the unpromoted next-feature items and the backlog (`sudus show items`).
+Read the spec set, the finished roadmap section, the Consequential queue (`sudus decisions`), the next-feature items not yet retired and the backlog (`sudus show items`).
 
 ### `ask`
-One open question: the waiting items, a new feature, or both? Then, for each requested change, `radius`.
+One open question: the waiting items, a new feature, or both? Record each item the developer drops, and each item a change they confirm answers, with `sudus retire <item>... --quote "<their words>"`; it is not offered again. Then, for each requested change, `radius`.
 
 ### `radius`
 Trace and cite the blast radius: requirements, mechanisms, code and documents.

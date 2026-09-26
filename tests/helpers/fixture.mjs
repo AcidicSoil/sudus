@@ -10,7 +10,7 @@ import { authorize } from "../../lib/auth.mjs";
 import { init } from "../../lib/init.mjs";
 import { loadSettings } from "../../lib/settings.mjs";
 import { answer } from "../../lib/escalate.mjs";
-import { supersede } from "../../lib/commitment.mjs";
+import { supersede, retire } from "../../lib/commitment.mjs";
 
 export const ROOT = resolve(new URL("../..", import.meta.url).pathname);
 export const KERNEL = join(ROOT, "bin/sudus.mjs");
@@ -132,6 +132,7 @@ export function buildProject({ settings = SETTINGS } = {}) {
     authorize: () => authorize(dir, { quote: "ok", env: {} }),
     answer: (slug, kind, text) => answer(dir, slug, kind, { quote: text, env: {} }),
     supersede: (successor, quote) => supersede(dir, successor, { quote, env: {} }),
+    retire: (refs, quote) => retire(dir, refs, { quote, env: {} }),
   };
   const write = (p, text) => { mkdirSync(join(dir, p, ".."), { recursive: true }); writeFileSync(join(dir, p), text); };
   const commit = (msg) => { git("add", "-A"); git("commit", "-q", "-m", msg); return git("rev-parse", "HEAD").trim(); };

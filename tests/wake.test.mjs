@@ -1066,7 +1066,7 @@ test('an instead answer on a retire escalation keeps the item in the backlog', a
 test('only a backlog item that waits is retired, and only a retire concern may name a finished commitment', async () => {
   const r = await finished();
   const idea = await r.item('next-feature', 'DEMO-001', 'colour');
-  await assert.rejects(escalate(r.cwd, retireDraft(idea)), { message: 'sudus: item colour is a next-feature item; only a backlog item is retired' });
+  await assert.rejects(escalate(r.cwd, retireDraft(idea)), { message: 'sudus: item colour is a next-feature item; only a backlog item is retired by escalation; when the developer drops it, record their words with sudus retire colour --quote "<their words>"' });
   await assert.rejects(escalate(r.cwd, retireDraft('a'.repeat(40))), { message: `sudus: no item record ${'a'.repeat(40)}` });
   await r.add('done', 'first', { slug: 'first', snapshot: await r.snap() });
   const item = await r.item('backlog', 'DEMO-001', 'nicer-greeting');
@@ -1084,6 +1084,60 @@ test('the ok on a capture escalation naming an item leaves it in the backlog', a
   await r.add('done', 'first', { slug: 'first', snapshot: await r.snap() });
   const v = await wake(r.cwd);
   assert.deepEqual([v.verdict, v.action, v.target], ['Resolvable', 'promote', 'nicer-greeting']);
+});
+
+// Issue #34 (spec revision 17): nothing closed a next-feature item, so every later next-feature
+// pass offered it again, and a backlog item the developer had already dropped needed a second
+// prompt. `sudus retire` records the developer's words once for every item they named.
+import { retire } from '../lib/commitment.mjs';
+
+test("the developer's words retire next-feature and backlog items at once (issue #34)", async () => {
+  const r = await finished();
+  await r.add('done', 'first', { slug: 'first', snapshot: await r.snap() });
+  const idea = await r.item('next-feature', 'contract', 'colour');
+  const item = await r.item('backlog', 'DEMO-001', 'nicer-greeting');
+  const v = await wake(r.cwd);
+  assert.deepEqual([v.verdict, v.action, v.target], ['Resolvable', 'promote', 'nicer-greeting']);
+  let out = '', err = '';
+  const io = { cwd: r.cwd, env: {}, stdout: { write: (s) => { out += s; } }, stderr: { write: (s) => { err += s; } } };
+  assert.equal(await main(['retire', 'colour', 'nicer-greeting', '--quote', 'skip these'], io), 0, err);
+  const sha = /^retire ([0-9a-f]{40}) colour nicer-greeting\n$/.exec(out)?.[1];
+  assert.ok(sha, out);
+  const rec = (await r.log()).find((x) => x.sha === sha);
+  assert.equal(rec.kind, 'retirement');
+  assert.deepEqual(rec.payload.items, [idea, item]);
+  assert.deepEqual([rec.payload.evidence.mode, rec.payload.evidence.purpose, rec.payload.evidence.quote], ['attested', 'retire', 'skip these']);
+  assert.equal((await wake(r.cwd)).verdict, 'Done');
+  out = '';
+  assert.equal(await main(['show', 'items'], io), 0);
+  assert.equal(out, `${idea} next-feature colour from contract retired by ${sha}: an idea\n${item} backlog nicer-greeting from DEMO-001 retired by ${sha}: an idea\n`);
+  const how = `was retired by the developer's words in retirement ${sha}`;
+  await assert.rejects(promote(r.cwd, item), { message: `item nicer-greeting ${how}` });
+  await assert.rejects(escalate(r.cwd, retireDraft(item)), { message: `sudus: item nicer-greeting ${how}` });
+  await assert.rejects(retire(r.cwd, ['colour'], { quote: 'skip it', env: {} }), { message: `item colour ${how}` });
+});
+
+test('retire refuses a defect, a promoted item, a repeat, an unknown item and missing words, and writes nothing', async () => {
+  const r = await finished();
+  const idea = await r.item('next-feature', 'contract', 'colour');
+  await r.item('defect', 'DEMO-001', 'crash');
+  const item = await r.item('backlog', 'DEMO-001', 'nicer-greeting');
+  await r.add('promotion', 'nicer-greeting', { item, decision: ulid(), intent: null, results: [] });
+  const before = (await r.log()).length;
+  const words = { quote: 'skip it', env: {} };
+  await assert.rejects(retire(r.cwd, [], words), { message: 'retire needs one or more item slugs or shas' });
+  await assert.rejects(retire(r.cwd, ['colour'], { env: {} }), { message: 'retire needs the developer\'s words: --quote "<text>"' });
+  await assert.rejects(retire(r.cwd, ['colour', 'crash'], words), { message: 'item crash is a defect; a defect is fixed, not retired' });
+  await assert.rejects(retire(r.cwd, ['colour', 'nicer-greeting'], words), { message: 'item nicer-greeting was promoted; it is not retired' });
+  await assert.rejects(retire(r.cwd, ['colour', idea], words), { message: 'item colour is named twice' });
+  await assert.rejects(retire(r.cwd, ['nope'], words), { message: 'nope is not an item record or item slug; sudus show items lists them' });
+  assert.equal((await r.log()).length, before);
+  let err = '';
+  const io = { cwd: r.cwd, env: {}, stdout: { write: () => {} }, stderr: { write: (s) => { err += s; } } };
+  assert.notEqual(await main(['retire', '--quote', 'skip it'], io), 0);
+  assert.match(err, /retire needs one or more item slugs or shas/);
+  assert.notEqual(await main(['retire', 'colour', '--quote', 'skip it', '--bogus'], io), 0);
+  assert.equal((await r.log()).length, before);
 });
 
 // Issue #28 (spec revision 15): attempts at a requirement count from its turn. Before, the refresh

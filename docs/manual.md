@@ -87,7 +87,11 @@ open the next feature specification. A defect against the current
 commitment's own requirement is neither: it is worked now, because the
 agreement already forbids it. When other work already delivered a backlog
 item, the agent asks you to retire it instead of promoting it; your `ok`
-takes it out of the backlog.
+takes it out of the backlog. When you drop an item in conversation, backlog
+or next-feature, or confirm a spec change that answers a next-feature item,
+the agent records your words once with `sudus retire`, and the item is not
+offered again. The agent captures a next-feature item only for a change you
+asked for or one a real bug needs, never for an edge case or ceremony.
 
 This is the new-project skill: from an empty directory to an Agreed first
 commitment.
@@ -504,8 +508,8 @@ command: the agent asks, you answer, the agent records.
 
 ### Attested or signed
 
-`sudus answer`, `sudus decisions --read` and `sudus authorize` carry
-evidence of your decision. By default the project uses attested mode: the
+`sudus answer`, `sudus decisions --read`, `sudus authorize` and `sudus
+retire` carry evidence of your decision. By default the project uses attested mode: the
 record holds your words as the agent quoted them, the name of the harness
 the conversation ran in, and your Git author identity. That is evidence,
 not cryptographic proof it was you, and Sudus says so wherever it reports
@@ -588,8 +592,8 @@ flowchart TB
   start(["Start: /next-feature"])
   isdone{"sudus wake says Done?"}
   notdone(["Stop: hand the verdict to the working agreement"])
-  read["Read the spec set, finished roadmap section, Consequential queue, unpromoted next-feature items and backlog"]
-  ask["One open question: waiting items, a new feature, or both?"]
+  read["Read the spec set, finished roadmap section, Consequential queue, next-feature items not yet retired and backlog"]
+  ask["One open question: waiting items, a new feature, or both? Retire what the developer drops"]
 
   subgraph change["For each requested change"]
     radius["Trace and cite the blast radius: requirements, mechanisms, code, documents"]
@@ -1132,6 +1136,7 @@ prints one with its references resolved.
 | `item --backlog\|--defect --slug <s> --from <REQ> --body <text>` | Capture an idea or a defect against an Agreed requirement. |
 | `item --next-feature --slug <s> --from <REQ or contract> --body <text>` | Capture a change to Agreed text or a contract path; it waits for the developer. |
 | `outside <item-sha> --reason <text>` | Record that a captured item is not this commitment's work. |
+| `retire <item>... --quote <words>` | Record that the developer dropped one or more backlog or next-feature items, or that a spec change they confirmed answers them, with their words as evidence; a retired item is never promoted or offered again. Refuses a defect and a promoted item. |
 | `fix <item-sha>` | Record that a defect item is fixed, naming the workspace snapshot. Runs under the open commitment, or under the last closed one when it raised the defect against its own requirement. |
 | `decide --consequential --title <t> --rests-on <REQ,...> --wrong-if <t> --body <t>` | Record a spec-phase deference ruling, before any commitment is open. |
 | `decide --consequential --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> [--option <t>...] [--path <file>...] [--decision <id>...]` | Record a measured work-loop Consequential decision; the agent continues. Refused without a current `composite`-outcome measurement: `sudus: no measurement for this exact draft; run sudus measure first` when the draft differs from the one measured, or a message naming the floor or veto that caught it. |
@@ -1182,6 +1187,7 @@ Sudus reads it back; the full field list is in
 | `calibration` | Policy digest, sample, false-downgrade count, bound, pass/fail. | Tuning `weights`, `agent_ceiling` and `confidence_floors`; never a gate. |
 | `item` | Kind (backlog/next-feature/defect), slug, source, body. | Capture, Done, next feature. |
 | `outside` | Item sha, reason. | Capture gate. |
+| `retirement` | Item shas, the developer's evidence. | Promotion, Done, next feature. |
 | `promotion` | Item sha, decision id. | After Done. |
 | `fix` | Item sha, workspace snapshot. | Done. |
 | `scope-breach` / `scope` | Path, first-observed snapshot, allowed base, disposition. | Every wake, until disposed. |

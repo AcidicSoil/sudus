@@ -8,8 +8,8 @@ digraph next_feature {
   start [shape=oval, label="Start: /next-feature"];
   isdone [shape=diamond, label="sudus wake says Done?"];
   notdone [shape=oval, label="Stop: hand the verdict\nto the working agreement"];
-  read [label="Read the spec set, finished roadmap section,\nConsequential queue, unpromoted next-feature items\nand backlog"];
-  ask [label="One open question:\nwaiting items, a new feature, or both?"];
+  read [label="Read the spec set, finished roadmap section,\nConsequential queue, next-feature items not yet\nretired and backlog"];
+  ask [label="One open question:\nwaiting items, a new feature, or both?\nRetire what the developer drops"];
 
   subgraph cluster_change {
     label="For each requested change"; style=dashed; fontname="Helvetica"; fontsize=11;

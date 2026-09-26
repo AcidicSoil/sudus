@@ -402,6 +402,10 @@ test("full loop: promote, second start, supersede; exact kind sequence and cover
   await tail(p);
   const { itemSha, defectSha } = await work(p);
   await finish(p);
+  // Issue #34 (spec revision 17): after Done, a next-feature item the developer drops is retired
+  // with their words, and the next-feature pass no longer offers it.
+  p.sudus(["item", "--next-feature", "--slug", "colour", "--from", "contract", "--body", "Colour the output."]);
+  await p.developer.retire(["colour"], "Developer: skip that one.");
 
   // Deviation from the plan text, recorded in the report: lib/commitment.mjs's promote() moves
   // the roadmap's Current: line but never fabricates a new roadmap section from the backlog
@@ -457,6 +461,8 @@ test("full loop: promote, second start, supersede; exact kind sequence and cover
     "resolution",
     // finish(): the build check (confirms REQ-001 after the default-export edit), then done.
     "receipt", "done",
+    // Issue #34: the dropped next-feature item and its retirement.
+    "item", "retirement",
     // promote(): transactional (command-intent), the promotion record, and the successor start.
     "command-intent", "promotion", "start",
     // full-loop test: the carried-over add-nan fix stands under fixture-2 (issue #4), so nothing

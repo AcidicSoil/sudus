@@ -25,7 +25,7 @@ Return to the work loop under AGENTS.md.
 A commitment is open. The developer chooses: finish it (`finish`) or supersede it (`supersede`). State both and what each changes.
 
 ### `finish`
-Capture the request: `sudus item --backlog --slug <slug> --from <REQ> --body "<what>"`, or `--next-feature` when it would change Agreed text. Return to the work loop.
+Capture the request: `sudus item --backlog --slug <slug> --from <REQ> --body "<what>"`, or `--next-feature` when it would change Agreed text and the developer asked for it or a real bug needs it; never capture an edge case or a ceremony step. Return to the work loop.
 
 ### `supersede`
 Run `sudus supersede <successor-slug> --quote "<the developer's words>"`. It writes the developer-quoted Consequential decision and the superseded record: old range closed with a transition id and intended slug; open escalations, unresolved findings and unfixed defects carried. It does not move `Current:` and cannot name a start that does not exist. Then `pending`.

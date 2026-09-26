@@ -4,8 +4,22 @@ Prefix: SUDUS
 Scope: the Sudus 2 kernel: its records, verdicts, commands, skills and evaluator
 
 
-Status: Draft, revision 16, 2026-09-25. Nothing here is Agreed until the
+Status: Draft, revision 17, 2026-09-26. Nothing here is Agreed until the
 developer confirms it.
+
+Revision 17 lets the developer drop items in conversation (section 8,
+Capture and promotion). When the developer says to drop backlog or
+next-feature items, or confirms a spec change that answers a next-feature
+item, the agent records their words once with `sudus retire <item>...
+--quote "<their words>"`. A retired item is never promoted, and the
+next-feature pass no longer offers it. Before, nothing closed a next-feature
+item, so every later pass offered it again, and a backlog item the developer
+had dropped still needed an escalation and a second ok (issue #34). The agent
+also captures a next-feature item only for a change the developer asked for
+or one a real bug needs, never for an edge case or ceremony. The developer
+reported that agents captured such items and told the agent to skip them; the
+capture rule is the agent's addition. The developer accepted both on
+2026-09-26 ("ok").
 
 Revision 16 changes the adversary (section 9); the developer set each rule on
 2026-09-25 and accepted the design ("ok"). The adversary is one fresh
@@ -593,8 +607,8 @@ the agent under the superseded design.
 **Item.** A captured idea of kind `backlog`, `next-feature` or `defect`.
 Backlog work is already covered by Agreed requirements. A next-feature item
 would change Agreed text or the working agreement and names what. A defect names
-an Agreed requirement the code violates. Outside, promotion and fix records
-later reference the item.
+an Agreed requirement the code violates. Outside, promotion, fix and
+retirement records later reference the item.
 
 **Scope breach.** A durable record of the first Sudus observation, while a
 commitment is open, that a path differs from the latest allowed workspace
@@ -797,7 +811,7 @@ that reproduces it. The flow then enters the shared tail.
 ### Next feature
 
 `next-feature.dot` runs only after Done. It reads the spec set, finished roadmap
-section, Consequential queue, unpromoted next-feature items and backlog, then
+section, Consequential queue, next-feature items not yet retired and backlog, then
 asks one question: the waiting items, a new feature, or both?
 
 For every requested change it traces and cites the blast radius, restates what
@@ -915,6 +929,7 @@ The table names logical payload fields. `<ws>` is a workspace snapshot SHA,
 | `calibration` | policy digest, labelled-through log head, predicted-agent count, false-downgrade count, one-sided confidence bound, criterion, `pass|fail` | policy validation over labelled measurements |
 | `item` | `backlog|next-feature|defect`, slug, source requirement or changed contract, body | capture, Done and next-feature |
 | `outside` | item SHA, reason, optional evaluation SHA | capture gate |
+| `retirement` | item SHAs, developer-auth evidence | promotion, Done and next-feature |
 | `promotion` | item SHA, decision ID, intent SHA or null, results | after Done |
 | `fix` | item SHA, `<ws>` | Done |
 | `scope-breach` | path as JSON string, first-observed `<ws>`, allowed-base `<ws>`, declaration-set digest | every wake until disposition |
@@ -1351,8 +1366,8 @@ agent reads the measurement, including its advisory `suggested: agent |
 developer`, and decides, except at the narrow floor or a veto, or when the
 agent itself chooses to escalate anyway; no other level is measured.
 
-The agent runs `sudus answer`, `sudus decisions --read` and `sudus authorize`
-only after the developer has answered in conversation, and never asks the
+The agent runs `sudus answer`, `sudus decisions --read`, `sudus authorize` and
+`sudus retire` only after the developer has answered in conversation, and never asks the
 developer to run a command. With a signing key in force their records must
 verify against it: the key in the settings the latest verified init or
 authorization bound, never a key the settings file on disk names since and
@@ -1407,6 +1422,20 @@ backlog: `sudus show items` marks it, the Done verdict lists it, and
 the ok: wake then names the item's promotion again. An instead answer leaves
 the item first in line; an item captured after the ok is not covered by it.
 Added 2026-09-25 (revision 15, issue #29).
+
+The developer may also drop items in conversation. When they say to drop one
+or more backlog or next-feature items, or confirm a spec change that answers a
+next-feature item, the agent records their words once with `sudus retire
+<item>... --quote "<their words>"`. The retirement record names every item
+and carries the developer's evidence. A retired item is never promoted, wake
+stops naming its promotion, and the next-feature pass no longer offers it. A
+defect is fixed, not retired, and a promoted item is not retired. This is the
+only way a next-feature item leaves the waiting list. Added 2026-09-26
+(revision 17, issue #34).
+
+The agent captures a next-feature item only for a change the developer asked
+for or one a real bug needs. An edge case or a ceremony step is not captured.
+Added 2026-09-26 (revision 17).
 
 Model-recommended capture is fallible. Sudus does not claim a passing mechanism
 proves a captured change unnecessary. The item remains visible, the frozen
@@ -1862,8 +1891,8 @@ specification.
 10. Verdicts are Resolvable, Waiting and Done; Waiting alone is the developer's
     turn.
 11. The developer answers in conversation and the agent records the answer
-    with `sudus answer`, `sudus decisions --read` and `sudus authorize`; a
-    quoted answer with the harness and Git author is evidence, not
+    with `sudus answer`, `sudus decisions --read`, `sudus authorize` and
+    `sudus retire`; a quoted answer with the harness and Git author is evidence, not
     authentication.
 12. Global install makes the command link and hooks. Project initialization,
     not install, configures a repository.
