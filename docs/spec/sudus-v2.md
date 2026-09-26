@@ -1366,21 +1366,20 @@ agent reads the measurement, including its advisory `suggested: agent |
 developer`, and decides, except at the narrow floor or a veto, or when the
 agent itself chooses to escalate anyway; no other level is measured.
 
-The agent runs `sudus answer`, `sudus decisions --read`, `sudus authorize` and
-`sudus retire` only after the developer has answered in conversation, and never asks the
-developer to run a command. With a signing key in force their records must
-verify against it: the key in the settings the latest verified init or
-authorization bound, never a key the settings file on disk names since and
-never a key an unverified record names. In
-attested mode the developer's quoted words, the harness name and the Git
-author are evidence only; Sudus says so wherever it reports the decision.
-With `developer: absent`, none of this paragraph's questions has anyone to
-answer it; section 5 states what the floor does instead. Revised
-2026-09-21: previously "The developer runs `sudus answer` and `sudus
-decisions --read`; the agent never does", with a controlling-terminal
-confirmation as the unsigned evidence. The developer ruled that nobody is
-ever asked to run a command; the answer is given in conversation and the
-agent records it.
+The agent runs `sudus answer`, `sudus decisions --read`, `sudus authorize`
+and `sudus retire` only after the developer has answered in conversation,
+and never asks the developer to run a command. With a signing key in force
+their records must verify against it: the key in the settings the latest
+verified init or authorization bound, never a key the settings file on disk
+names since and never a key an unverified record names. In attested mode the
+developer's quoted words, the harness name and the Git author are evidence
+only; Sudus says so wherever it reports the decision. With `developer:
+absent`, none of this paragraph's questions has anyone to answer it; section
+5 states what the floor does instead. Revised 2026-09-21: previously "The
+developer runs `sudus answer` and `sudus decisions --read`; the agent never
+does", with a controlling-terminal confirmation as the unsigned evidence.
+The developer ruled that nobody is ever asked to run a command; the answer
+is given in conversation and the agent records it.
 
 Revised 2026-09-19: previously "With evaluation disabled or outside its
 envelope, the requested command uses the kernel level. In shadow mode the

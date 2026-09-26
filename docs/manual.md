@@ -509,11 +509,11 @@ command: the agent asks, you answer, the agent records.
 ### Attested or signed
 
 `sudus answer`, `sudus decisions --read`, `sudus authorize` and `sudus
-retire` carry evidence of your decision. By default the project uses attested mode: the
-record holds your words as the agent quoted them, the name of the harness
-the conversation ran in, and your Git author identity. That is evidence,
-not cryptographic proof it was you, and Sudus says so wherever it reports
-the decision.
+retire` carry evidence of your decision. By default the project uses
+attested mode: the record holds your words as the agent quoted them, the
+name of the harness the conversation ran in, and your Git author identity.
+That is evidence, not cryptographic proof it was you, and Sudus says so
+wherever it reports the decision.
 
 A signing key is optional. To use one, put your public key (PEM) in
 `signing_key` in `.sudus/settings.json`. That is a settings change, so the
