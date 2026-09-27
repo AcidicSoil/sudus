@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.3 - 2026-09-27
+
+- `sudus decide`, `answer`, `realize` and `decisions --read` append to `docs/decisions.jsonl` after it holds a multi-byte character (issue #37). The check on the file's new lines cut them from the decoded text at the old file's length in bytes, so after a character such as an ellipsis the cut started inside the new line, and every later append was refused as a scope violation. The check now cuts the new lines from the bytes. A project stuck on this appends again once it runs 4.2.3.
+
 ## 4.2.2 - 2026-09-27
 
 - The `view` option no longer carries an `options` list, a key the plugin directory's validator does not accept yet. Its description names the four values, and any other value still reads as `off`. In `/config` the setting is now a text field.
