@@ -120,6 +120,20 @@ test('S2: lint refuses a second Requirements: line in one roadmap section', asyn
   const repo = await specRepo(t, { 'roadmap.md': '# Roadmap\n\nCurrent: first\n\n## first\n\nRequirements: LOOP-001\nRequirements: LOOP-001\n' });
   assert.match((await reasons(repo)).join(), /docs\/spec\/roadmap.md:8: second Requirements: line in section first/);
 });
+test('lint refuses a Requirements: line wrapped onto the next line (issue #36)', async (t) => {
+  // A wrap after a comma: the continuation's identifiers entered no frozen set, and lint was clean.
+  const comma = await specRepo(t, { 'roadmap.md': '# Roadmap\n\nCurrent: first\n\n## first\n\nRequirements: LOOP-001,\nUI-001\n\nDelivers it.\n' });
+  assert.deepEqual(await reasons(comma), [
+    'docs/spec/roadmap.md:7: Requirements: line in section first ends in a comma; list every identifier on that one line',
+    'docs/spec/roadmap.md:8: identifiers on the line after Requirements: in section first enter no requirement set; list them on the Requirements: line',
+  ]);
+  // A wrap without the comma, indented.
+  const bare = await specRepo(t, { 'roadmap.md': '# Roadmap\n\nCurrent: first\n\n## first\n\nRequirements: LOOP-001\n  UI-001, LOOP-002\n' });
+  assert.deepEqual(await reasons(bare), ['docs/spec/roadmap.md:8: identifiers on the line after Requirements: in section first enter no requirement set; list them on the Requirements: line']);
+  // Prose right after the line, even prose naming an identifier, is still prose.
+  const prose = await specRepo(t, { 'roadmap.md': '# Roadmap\n\nCurrent: first\n\n## first\n\nRequirements: LOOP-001\nLOOP-001 is done when the stale write is refused.\n' });
+  assert.deepEqual(await reasons(prose), []);
+});
 test('S8: lint refuses two blocks with no blank line between them', async (t) => {
   const repo = await specRepo(t, { 'ui.md': 'Prefix: UI\n\n[UI-001] x\nFalsifier: f\nMechanism: m\nStatus: Draft\n[UI-002] y\nFalsifier: f\nMechanism: m\nStatus: Draft\n' });
   assert.match((await reasons(repo)).join(), /missing blank line before the next requirement block/);

@@ -1000,8 +1000,11 @@ mechanism, noncanonical status dates, and a spec map that
 does not match domain prefixes. That refusal is the falsifier for this grammar.
 
 The roadmap parser reads only `Current: <slug>` and, below the matching heading,
-`Requirements: <identifiers>`. The rest is prose. `sudus start` resolves the
-whole set and digests it before writing anything.
+`Requirements: <identifiers>`. The rest is prose. A section's set is that one
+line: lint refuses a second `Requirements:` line, one that ends in a comma, and
+a line of bare identifiers right after it, since their identifiers would enter
+no set. `sudus start` resolves the whole set and digests it before writing
+anything.
 
 ### Commands and crash recovery
 

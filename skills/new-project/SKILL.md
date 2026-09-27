@@ -40,7 +40,7 @@ For each domain write `docs/spec/<domain>.md` with `Prefix: <PREFIX>` and one bl
 More domains? Yes: `draft`. No: `roadmap`.
 
 ### `roadmap`
-Write `docs/spec/roadmap.md`: `Current: <slug>` naming the first commitment and its section (heading, `Requirements:`, delivery prose, done-when prose).
+Write `docs/spec/roadmap.md`: `Current: <slug>` naming the first commitment and its section (heading, one `Requirements:` line holding every identifier, however long, delivery prose, done-when prose).
 
 ### `tail`
 Gate 4: the spec-phase tail below.
