@@ -498,7 +498,7 @@ It is off until you turn it on. To turn it on:
    ```
 
 2. Choose where the verdict shows. In Claude Code, open `/config`, find
-   **Where the Sudus verdict shows**, and pick `above-prompt`. Or set it
+   **Where the Sudus verdict shows**, and enter `above-prompt`. Or set it
    in `~/.claude/settings.json`:
 
    ```json

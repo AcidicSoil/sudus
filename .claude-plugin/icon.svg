@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 128 128">
+<title>Sudus</title>
+<defs>
+<linearGradient id="brass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6bf6c"/><stop offset="1" stop-color="#a0772f"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#f6e3b0" stop-opacity="0.55"/><stop offset="1" stop-color="#f6e3b0" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="128" height="128" rx="26" fill="#171411"/>
+<circle cx="104" cy="18" r="11" fill="url(#glow)"/>
+<path d="M104 9Q105 17 113 18Q105 19 104 27Q103 19 95 18Q103 17 104 9Z" fill="#f6e3b0"/>
+<g transform="translate(0 4)">
+<path d="M40.68 57.31A44 44 0 0 0 87.32 57.31" fill="none" stroke="#b58a3e" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M64 20L26.91 79.36M64 20L101.09 79.36" fill="none" stroke="#c99a45" stroke-width="5" stroke-linecap="round"/>
+<path d="M20.55 89.54A82 82 0 0 0 107.45 89.54L101.09 79.36A70 70 0 0 1 26.91 79.36Z" fill="url(#brass)"/>
+<path d="M30.43 83.13L27.38 88.87M34.92 85.32L33.49 88.52M39.55 87.19L37.32 93.3M44.29 88.73L43.33 92.09M49.13 89.94L47.78 96.3M54.05 90.8L53.56 94.27M59.01 91.33L58.56 97.81M64 91.5L64 95M68.99 91.33L69.44 97.81M73.95 90.8L74.44 94.27M78.87 89.94L80.22 96.3M83.71 88.73L84.67 92.09M88.45 87.19L90.68 93.3M93.08 85.32L94.51 88.52M97.57 83.13L100.62 88.87" stroke="#171411" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M67.45 20.61L51.53 105.12L46.61 104.26L60.55 19.39Z" fill="#d9ad58" stroke="#171411" stroke-width="1"/>
+<rect x="44.8" y="90.35" width="12" height="9" rx="1.5" fill="#e6bf6c" stroke="#171411" stroke-width="1" transform="rotate(10 50.8 94.85)"/>
+<rect x="72" y="39" width="33" height="10" rx="2.5" fill="url(#brass)"/>
+<rect x="66" y="37.5" width="6" height="13" rx="1.5" fill="#c99a45"/>
+<rect x="104" y="36.5" width="7" height="15" rx="2" fill="#e6bf6c"/>
+<circle cx="49" cy="44" r="6.5" fill="#2a2520" stroke="#e6bf6c" stroke-width="2"/>
+<rect x="57" y="14" width="14" height="10" rx="1.5" fill="#2a2520" stroke="#e6bf6c" stroke-width="2" transform="rotate(10 64 19)"/>
+<circle cx="64" cy="20" r="2.6" fill="#e6bf6c"/>
+</g>
+</svg>

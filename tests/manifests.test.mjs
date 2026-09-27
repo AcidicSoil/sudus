@@ -32,8 +32,20 @@ test("Claude Code reads the status line module through plugin.json, never throug
   assert.ok(existsSync(join(ROOT, "mod/register.tsx")));
   assert.deepEqual(Object.keys(p.userConfig), ["view", "face", "motion", "command"]);
   assert.equal(p.userConfig.view.default, "off");
-  assert.deepEqual(p.userConfig.view.options, ["off", "above-prompt", "pane", "both"]);
+  // The plugin directory's validator refuses an option key it does not know, such as options,
+  // which Claude Code accepts; register.tsx reads any view it does not know as off.
+  for (const [k, o] of Object.entries(p.userConfig)) {
+    assert.deepEqual(Object.keys(o).filter((x) => !["type", "title", "description", "default", "required", "sensitive"].includes(x)), [], k);
+    assert.ok(["string", "number", "boolean", "directory", "file"].includes(o.type) && o.title && o.description, k);
+  }
   for (const m of [".codex-plugin/plugin.json", ".muse-plugin/plugin.json"]) assert.ok(!readFileSync(join(ROOT, m), "utf8").includes("mod/"), m);
+});
+test("the plugin icon is a square SVG of at least 128px at the directory's path", () => {
+  const svg = readFileSync(join(ROOT, ".claude-plugin/icon.svg"), "utf8");
+  const [w, h] = [/<svg[^>]*\swidth="(\d+)"/.exec(svg)?.[1], /<svg[^>]*\sheight="(\d+)"/.exec(svg)?.[1]].map(Number);
+  assert.ok(w === h && w >= 128, `${w}x${h}`);
+  assert.match(svg, /viewBox="0 0 (\d+) \1"/);
+  assert.ok(!/[^\x00-\x7F]/.test(svg));
 });
 test("Muse registers the hooks it supports and lists the five skills", () => {
   const m = read(".muse-plugin/plugin.json");
