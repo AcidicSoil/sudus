@@ -1,4 +1,5 @@
 // tests/commitment.test.mjs
+import { cloneId } from '../lib/inbox.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -103,7 +104,9 @@ test('start freezes the roadmap section plus every Scope: every commitment Agree
   // command), which unconditionally injects intent and results into the terminal payload
   // (lib/tx.mjs's finish()); the plan's own carried obligation for this task closes the 'start'
   // schema with those two fields. The plan's literal 4-key list is extended to 6 here.
-  assert.deepEqual(Object.keys(rec.payload).sort(), ['from_superseded', 'intent', 'requirements', 'results', 'slug', 'snapshot']);
+  // Issue #35 (spec revision 18): the start names the clone that started it.
+  assert.deepEqual(Object.keys(rec.payload).sort(), ['clone', 'from_superseded', 'intent', 'requirements', 'results', 'slug', 'snapshot']);
+  assert.equal(rec.payload.clone, await cloneId(repo.cwd, { create: false }));
   assert.deepEqual(rec.payload.requirements.map((r) => r.requirement), ['CORE-001', 'DEMO-001']);
   assert.deepEqual(rec.payload.requirements, await frozenSet(repo.cwd, 'first'));
   assert.equal(rec.payload.from_superseded, null);

@@ -135,6 +135,7 @@ const NEXT: Record<string, (target: string) => string> = {
   accept: t => `independent check of the fixes on ${t}`,
   build: () => 'carrying out a recorded decision',
   done: t => `closing ${t}`,
+  fold: t => `bringing in ${t}, captured on another clone`,
   promote: t => `starting the next commitment, ${t}`,
   reply: t => `answering your question about ${t}`,
 }

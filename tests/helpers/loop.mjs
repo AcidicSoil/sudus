@@ -1,3 +1,4 @@
+import { cloneId } from '../../lib/inbox.mjs';
 import { mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { makeProject } from './repo.mjs';
@@ -22,7 +23,9 @@ export const mechanismFor = (r) => ({
   results: 'per-requirement', identity: {},
 });
 
-export async function loopRepo({ reqs = ['DEMO-001'], slug = 'first', settings = {}, layout = 'sudus' } = {}) {
+// `clone` (issue #35) names the clone the start record says holds the commitment: a clone id, or
+// 'self' for this repository's own; omitted, the start is the pre-4.2.0 shape, which names none.
+export async function loopRepo({ reqs = ['DEMO-001'], slug = 'first', settings = {}, layout = 'sudus', clone } = {}) {
   const { cwd } = await makeProject({ settings: { outside: ['README.md', 'notes/**'], source: ['src/**'], ...settings }, layout });
   const write = async (p, text) => {
     await mkdir(dirname(join(cwd, p)), { recursive: true });
@@ -55,6 +58,7 @@ export async function loopRepo({ reqs = ['DEMO-001'], slug = 'first', settings =
   const startSha = await appendRecord(cwd, 'start', slug, {
     slug, snapshot: startSnapshot, from_superseded: null, intent: null, results: [],
     requirements: blocks.map((b) => ({ requirement: b.id, text_digest: b.textDigest })),
+    ...(clone === undefined ? {} : { clone: clone === 'self' ? await cloneId(cwd) : clone }),
   });
   const add = (kind, target, payload) => appendRecord(cwd, kind, target, payload);
   const snap = () => writeWorkspaceSnapshot(cwd);

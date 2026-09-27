@@ -4,8 +4,23 @@ Prefix: SUDUS
 Scope: the Sudus 2 kernel: its records, verdicts, commands, skills and evaluator
 
 
-Status: Draft, revision 17, 2026-09-26. Nothing here is Agreed until the
+Status: Draft, revision 18, 2026-09-26. Nothing here is Agreed until the
 developer confirms it.
+
+Revision 18 lets a second clone capture items while another clone holds the
+open commitment (section 4, Inbox; section 8, Capture and promotion). The
+log is one append-only chain that is never merged, so a capture appended on a
+clone that was not doing the work raced the clone that was: the first push
+won, and the repair for the other side dropped its records (issue #35). The
+start record now names the clone that started it. While that commitment is
+open, `sudus item` on any other clone writes that clone's own inbox,
+`refs/sudus/inbox/<clone id>`, which only it appends to and which `sudus
+push` publishes. After Done, wake names `fold`, and `sudus fold` appends
+each inbox item to the log as an ordinary item. The issue proposed one shared
+inbox merged by slug and a direct log append from a clone caught up with the
+remote; a caught-up clone cannot see another clone's unpushed records, so
+each clone keeps its own inbox and only folding writes the log. The developer
+accepted this on 2026-09-26 ("ok").
 
 Revision 17 lets the developer drop items in conversation (section 8,
 Capture and promotion). When the developer says to drop backlog or
@@ -489,6 +504,13 @@ expected old OID is required and a mismatch refuses the write. The log is a
 chain of record commits whose schema is in section 4. Records reference records
 by log SHA and code only by a kind-checked snapshot SHA.
 
+**Inbox.** `refs/sudus/inbox/<clone id>`, one per clone: a chain of item
+records in the log's own envelope that only that clone appends to, so its push
+always fast-forwards. The clone id is a random token in the clone's own
+`.git/config` (`sudus.clone`); the worktrees of one repository share it. While
+a commitment another clone started is open, `sudus item` writes this clone's
+inbox instead of the log. Added 2026-09-26 (revision 18, issue #35).
+
 **Action lease.** `refs/sudus/in-progress`, local to the repository and never
 pushed. `sudus begin <action> <target>` creates it with compare-and-swap before
 the agent changes a declared input, and prints the sha it wrote; `sudus end`
@@ -910,7 +932,7 @@ The table names logical payload fields. `<ws>` is a workspace snapshot SHA,
 | `authorization` | spec digest, agreement digest, settings digest, developer-auth evidence, optional decision ID, intent SHA or null, results | start and protected writes |
 | `command-intent` | transaction ID, command, complete input identity, expected pre-identities, ordered planned writes and digests | wake and `recover` until finalized |
 | `command-abort` | intent SHA, failure class, verified restored identities | wake and `recover` |
-| `start` | slug, `<ws>` roadmap snapshot, repeated `{requirement,text_digest}`, optional `from_superseded:<sha>`, intent SHA or null, results | every wake; opens the range |
+| `start` | slug, `<ws>` roadmap snapshot, repeated `{requirement,text_digest}`, optional `from_superseded:<sha>`, the starting clone's id (absent before revision 18), intent SHA or null, results | every wake; opens the range; routes item capture |
 | `receipt` | mechanism, definition digest, `<input>`, `ran|error`, observed declared environment, repeated requirement text digest and `pass|fail|unverified`, output digest, exit code or signal | freshness and attempts |
 | `review` | slug, `<ws>`, examined entries, one answer for every fixed question and target, findings | brief, report and Done |
 | `brief` | slug, review SHA, harness, adversary model or null, payload digest, the decisions it lists (revision 16; a 3.x brief also holds transport, boundary, projection and exclusion manifest digests) | report validation |
@@ -1026,9 +1048,12 @@ invocation can render the queue again.
 
 ### Travel with the code
 
-Only `refs/sudus/log` and `refs/sudus/snapshots` travel. When
-`authority_remote` is non-null, `sudus start` installs their exact fetch and
-push refspecs on that remote only. The working
+Only `refs/sudus/log`, `refs/sudus/snapshots` and the inboxes travel. When
+`authority_remote` is non-null, `sudus start` installs the two durable refs'
+exact fetch and push refspecs on that remote only, and a fetch refspec for
+`refs/sudus/inbox/*`. `sudus push` pushes this clone's own inbox after the
+log and before the branch, then fetches every other clone's inbox, so the
+clone that holds the commitment sees what they captured. The working
 agreement's push command atomically pushes the branch and both refs where the
 remote supports atomic push.
 
@@ -1075,6 +1100,7 @@ predicate. The table is normative.
 | `resolve SLUG N` | a resolution, or a decline with its reason, names finding N of its exact source record |
 | `build DECISION` | a realized ADR line names the decision's base and resulting snapshots and the realization check passed |
 | `done SLUG` | a done record names the commitment and final workspace snapshot |
+| `fold ITEM` | no commitment is open; every inbox item this clone holds is on the log, or its slug is held by a different item (added 2026-09-26, revision 18) |
 | `promote` | no commitment is open; one promotion names a backlog item and decision; `Current:` and a one-item successor start were written transactionally |
 | `reply SLUG` | a reply record names the open `ask` escalation |
 
@@ -1126,8 +1152,9 @@ open commitment (`supersede`); unfixed defect (`fix`); uncovered dirty input (`r
 (`review mechanism`); uncaptured item from the commitment (`capture`); missing
 current review (`review`); missing report (`report`); a finding neither
 resolved nor declined (`resolve`); unrealized Consequential decision (`build`); Done
-rule satisfied without a done record (`done`); closed range with a backlog item that neither retired nor waits
-(`promote`); Done.
+rule satisfied without a done record (`done`); closed range with an inbox
+item not yet on the log (`fold`); closed range with a backlog item that
+neither retired nor waits (`promote`); Done.
 
 While the report has an open finding, a missing current receipt waits: wake
 names the next `resolve` instead of `run`, so the checks run once, after the
@@ -1431,6 +1458,20 @@ stops naming its promotion, and the next-feature pass no longer offers it. A
 defect is fixed, not retired, and a promoted item is not retired. This is the
 only way a next-feature item leaves the waiting list. Added 2026-09-26
 (revision 17, issue #34).
+
+A clone that did not start the open commitment captures into its own inbox
+(section 4, Inbox). `sudus show items` lists an inbox item as not on the log,
+and wake never promotes one. After Done, with no commitment open and no
+supersession pending, wake names `fold`, and `sudus fold` appends each inbox
+item this clone holds, its own and those it fetched, to the log as an
+ordinary item record, so promotion, retirement and `wait:` work on it
+unchanged. An inbox item whose slug the log already holds with the same kind,
+source and body is already folded, and the same item in two inboxes folds
+once. An item whose slug the log or an earlier inbox holds with a different
+item stays in its inbox, is reported, and does not hold wake. Between
+commitments, and under a start written before this revision, which names no
+clone, every clone appends items to the log. Added 2026-09-26 (revision 18,
+issue #35).
 
 The agent captures a next-feature item only for a change the developer asked
 for or one a real bug needs. An edge case or a ceremony step is not captured.
@@ -1829,8 +1870,9 @@ package dependency or service. Linux and macOS are supported.
 
 The evaluator is opt-in and makes zero, one or two POSTs per admitted draft from
 one file. The adversary is a subagent of the current harness that reads the
-project and runs nothing. Two durable refs travel to one confirmed authority remote;
-the action lease, transaction staging and cycle counter remain local.
+project and runs nothing. Two durable refs and the clones' inboxes travel to
+one confirmed authority remote; the action lease, transaction staging and
+cycle counter remain local.
 
 How this repository develops and releases Sudus, including its attribution
 check and source-size norms, belongs in its own roadmap rather than this product

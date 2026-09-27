@@ -97,7 +97,7 @@ test('a pending supersession and an interrupted transaction are not verdicts', a
 });
 
 test('the precedence order is the one section 5 states', () => {
-  assert.deepEqual(ORDER, ['repair', 'recover', 'reconcile', 'scope', 'waiting', 'supersede', 'fix', 'record', 'declare', 'run', 'review mechanism', 'capture', 'review', 'report', 'resolve', 'build', 'done', 'promote']);
+  assert.deepEqual(ORDER, ['repair', 'recover', 'reconcile', 'scope', 'waiting', 'supersede', 'fix', 'record', 'declare', 'run', 'review mechanism', 'capture', 'review', 'report', 'resolve', 'build', 'done', 'fold', 'promote']);
 });
 
 async function treeHash(dir) {

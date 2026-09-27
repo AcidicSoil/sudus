@@ -422,6 +422,7 @@ Actions are attempted in this order:
 | resolve SLUG N | a resolution, or a decline with its reason, names N on its exact source record |
 | build DECISION | realized line names base and result snapshots; actual delta passes protected-category check |
 | done SLUG | Done rule holds; sudus done writes the final record |
+| fold ITEM | no commitment is open; every inbox item is on the log, or its slug is held by a different item |
 | promote | one backlog item, decision, roadmap move and successor start are one transaction |
 
 The Graphviz source is docs/diagrams/work-loop.dot.
@@ -1019,7 +1020,8 @@ To check the evaluator against the 24-scenario benchmark on your own key:
 
 ## Sending the records with the code
 
-Only `refs/sudus/log` and `refs/sudus/snapshots` travel with the code. Set
+Only `refs/sudus/log`, `refs/sudus/snapshots` and the clones' inboxes
+travel with the code. Set
 `authority_remote` during `sudus init` (or change it with a new
 `sudus authorize`) to the one remote these should reach; `null` means
 explicit local-only operation. Push everything together:
@@ -1036,6 +1038,20 @@ repair. After a fetch, `sudus wake` validates every cross-reference and
 names the exact fetch or push that repairs a gap; it never guesses. A
 clone missing the durable refs is told the exact `git fetch` to run, or,
 with no remote configured, to run `sudus init`.
+
+### Capturing on a second clone
+
+The log is one chain that is never merged, so only the clone doing the
+work appends to it while a commitment is open. The start record names that
+clone. On any other clone, for example one where you are thinking through
+the next feature, `sudus item` writes the clone's own inbox,
+`refs/sudus/inbox/<clone id>`, instead of the log. Only that clone appends
+to its inbox, so `sudus push` publishes it without racing the clone doing
+the work, and fetches every other clone's inbox. `sudus show items` lists
+an inbox item as not on the log. After Done, wake names `fold`, and
+`sudus fold` appends each inbox item to the log as an ordinary item, where
+promotion and retirement work on it. An inbox item whose slug the log
+already holds with a different item is reported and left in the inbox.
 
 ## Moving a project from Cairn
 
@@ -1104,6 +1120,7 @@ specific than the action word alone.
 | `resolve SLUG N` | An open finding is the agent's to decide: fix it and `sudus resolve`, or `sudus decline` it with its reason. |
 | `build DECISION` | Build what the decision says, commit, then `sudus realize`. |
 | `done SLUG` | Every condition holds: `sudus done SLUG`. |
+| `fold ITEM` | No commitment is open and an inbox holds an item another clone captured while the commitment was open: `sudus fold` appends every such item to the log. |
 | `promote` | No commitment is open and the backlog holds an item. Choose one; `sudus promote ITEM` (slug or sha). It refuses while any defect is unfixed, and while `Current:` names a section that is neither the finished commitment nor the item. An item other work already delivered is retired instead: `sudus escalate --commitment <finished slug> --concern retire:<item sha> ...`, and the developer's `ok` takes it out of the backlog. To rank a new feature above the waiting items, the agent escalates with `--concern wait:<item sha>` per item; your `ok` lets wake say Done while they wait, `sudus show items` marks them, and after the next Done wake names them again. |
 | `reply SLUG` | You asked a question with `ask`; the agent owes an explanation: `sudus reply SLUG "..."`. |
 | `Waiting` | An escalation needs your answer. With `developer: absent` no one can answer any escalation; wake exits 4 instead of sitting there. |
@@ -1117,7 +1134,7 @@ prints one with its references resolved.
 | Command | Purpose |
 |---|---|
 | `show <sha>` | Print one record, with the records and snapshots it references described. |
-| `show items` | List every item record: sha, kind, slug, source, body, and whether it was promoted, fixed, retired or waits until the next Done. |
+| `show items` | List every item record: sha, kind, slug, source, body, and whether it was promoted, fixed, retired or waits until the next Done; then every inbox item not yet on the log, with the clone it came from. |
 | `lint docs/spec` | Check the specification's grammar: identifiers, falsifiers, mechanisms, statuses, and the spec map. |
 | `init --remote <name>\|--local-only [--signing-key <path>] [--adopt <digest>] --quote <words>` | Create or adopt `.sudus/settings.json` and the two durable refs, with the developer's answer as flags; the command asks nothing itself. Attested unless `--signing-key` names a public key file. |
 | `migrate` | Move a project from the former layout (`.cairn/`, `refs/cairn/*`) to `.sudus/` and `refs/sudus/*`, once, between commitments; nothing to do on a Sudus project. |
@@ -1136,6 +1153,7 @@ prints one with its references resolved.
 | `item --backlog\|--defect --slug <s> --from <REQ> --body <text>` | Capture an idea or a defect against an Agreed requirement. |
 | `item --next-feature --slug <s> --from <REQ or contract> --body <text>` | Capture a change to Agreed text or a contract path; it waits for the developer. |
 | `outside <item-sha> --reason <text>` | Record that a captured item is not this commitment's work. |
+| `fold` | After Done, append every inbox item this clone holds, its own and those fetched, to the log as an ordinary item; an item whose slug the log holds with a different item is reported and left in its inbox. |
 | `retire <item>... --quote <words>` | Record that the developer dropped one or more backlog or next-feature items, or that a spec change they confirmed answers them, with their words as evidence; a retired item is never promoted or offered again. Refuses a defect and a promoted item. |
 | `fix <item-sha>` | Record that a defect item is fixed, naming the workspace snapshot. Runs under the open commitment, or under the last closed one when it raised the defect against its own requirement. |
 | `decide --consequential --title <t> --rests-on <REQ,...> --wrong-if <t> --body <t>` | Record a spec-phase deference ruling, before any commitment is open. |
@@ -1152,7 +1170,7 @@ prints one with its references resolved.
 | `report <slug> --file <path>` | Record the adversary's report. |
 | `resolve <slug> <n> "<how>" [--source <sha>]` | Record a fix for finding `n` of a specific review or report record. |
 | `decline <slug> <n> "<why>" [--source <sha>]` | Record that the agent declines finding `n`, with its reason. |
-| `push` | Push the branch and both durable refs to the authority remote. |
+| `push` | Push the branch, both durable refs and this clone's inbox to the authority remote, then fetch every other clone's inbox. |
 | `wake` | Print the current verdict. Writes nothing. |
 | `--help` | Print the command list. `sudus <command> --help` (or `-h`) prints that command's usage line and runs nothing. |
 | `--version` | Print the version; the first thing to compare with this manual when behavior differs. |
@@ -1171,7 +1189,7 @@ Sudus reads it back; the full field list is in
 | `authorization` | Spec, agreement, and settings digests; developer-auth evidence. | `start` and every protected write. |
 | `direction` | `instead` or `ask` on an authorization, the developer's words, harness, Git author. | Nothing; the log keeps it. |
 | `command-intent` / `command-abort` | A multi-record write's plan, or its verified rollback. | `wake` and `recover`, until finished. |
-| `start` | Slug, roadmap workspace snapshot, the frozen requirement set with text digests. | Every wake; opens the range. |
+| `start` | Slug, roadmap workspace snapshot, the frozen requirement set with text digests, and the clone that started it. | Every wake; opens the range; routes item capture. |
 | `receipt` | Mechanism and definition digest, input snapshot, per-requirement result and text digest, output digest. | Freshness and attempt counting. |
 | `review` | Slug, workspace snapshot, the six answers, findings. | Brief, report, Done. |
 | `brief` | Slug, review sha, harness, model, brief digest, the decisions it lists. | Report validation. |

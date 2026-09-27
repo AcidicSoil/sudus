@@ -9,7 +9,8 @@ import { git, readRef } from '../lib/gitx.mjs';
 import { init } from '../lib/init.mjs';
 import { loadSettings } from '../lib/settings.mjs';
 import { authorize } from '../lib/auth.mjs';
-import { start } from '../lib/commitment.mjs';
+import { start, item } from '../lib/commitment.mjs';
+import { cloneId, readInboxes } from '../lib/inbox.mjs';
 import { appendRecord, readLog } from '../lib/records.mjs';
 import { ulid } from '../lib/canon.mjs';
 import { wake } from '../lib/wake.mjs';
@@ -92,7 +93,7 @@ describe('refspecs', () => {
   test('the exact fetch and push refspecs, one per durable ref', () => {
     assert.deepEqual(DURABLE_REFS, ['refs/sudus/log', 'refs/sudus/snapshots']);
     assert.deepEqual(refspecsFor(), {
-      fetch: ['refs/sudus/log:refs/sudus/log', 'refs/sudus/snapshots:refs/sudus/snapshots'],
+      fetch: ['refs/sudus/log:refs/sudus/log', 'refs/sudus/snapshots:refs/sudus/snapshots', 'refs/sudus/inbox/*:refs/sudus/inbox/*'],
       push: ['refs/sudus/log:refs/sudus/log', 'refs/sudus/snapshots:refs/sudus/snapshots'],
     });
   });
@@ -236,6 +237,32 @@ describe('push', () => {
     await assert.rejects(push(cwd), /sudus: no authority remote/);
   });
   test('PUSH_COMMAND is sudus push', () => assert.equal(PUSH_COMMAND, 'sudus push'));
+});
+
+// Issue #35 (spec revision 18): a second clone captures into its own inbox while the first holds
+// the open commitment, so neither push drops the other's records, and the first sees the item.
+describe('inboxes', () => {
+  test('a second clone captures into its inbox while the first holds the commitment, and neither push drops the other (issue #35)', async () => {
+    const a = await started();
+    await push(a.cwd);
+    const b = mkdtempSync(join(tmpdir(), 'sudus-clone-'));
+    sh(b, 'clone', '-q', '--origin', 'authority', a.remote, '.');
+    sh(b, 'fetch', '-q', 'authority', 'refs/sudus/log:refs/sudus/log', 'refs/sudus/snapshots:refs/sudus/snapshots');
+    // The first clone holds the commitment: its capture is an unpushed record on its log.
+    const fromA = await item(a.cwd, { kind: 'next-feature', slug: 'from-a', source: 'contract', body: 'captured where the work is' });
+    assert.equal((await readLog(a.cwd)).at(-1).sha, fromA);
+    // The second clone's capture goes to its own inbox, and its push leaves the log alone.
+    const fromB = await item(b, { kind: 'next-feature', slug: 'from-b', source: 'contract', body: 'captured on the side' });
+    const bClone = await cloneId(b, { create: false });
+    assert.ok(!(await readLog(b)).some((r) => r.sha === fromB));
+    assert.equal(await readRef(b, `refs/sudus/inbox/${bClone}`), fromB);
+    assert.ok((await push(b)).pushed.includes(`refs/sudus/inbox/${bClone}`));
+    // The first clone's push is not refused as diverged, and it fetches the second clone's inbox.
+    const r = await push(a.cwd);
+    assert.ok(r.pushed.includes('refs/sudus/log'));
+    assert.equal(sh(a.remote, 'rev-parse', 'refs/sudus/log'), fromA);
+    assert.deepEqual((await readInboxes(a.cwd)).map((x) => [x.payload.slug, x.clone, x.sha]), [['from-b', bClone, fromB]]);
+  });
 });
 
 describe('validateAfterFetch', () => {
