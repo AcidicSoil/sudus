@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.1 - 2026-09-27
+
+- `sudus lint` refuses a roadmap `Requirements:` line wrapped onto the next line (issue #36). The parser read only the first line and took the rest as prose, so the identifiers on the continuation entered no frozen set, and both `sudus lint` and `sudus start` passed. Lint now names a `Requirements:` line that ends in a comma and a line of bare identifiers right after it, as it already named a second `Requirements:` line, and start refuses until the set is on one line. Prose after the line is still prose.
+
 ## 4.2.0 - 2026-09-26
 
 Spec revision 18, on the developer's ok of 2026-09-26. The start record gains a field; earlier logs still read.
