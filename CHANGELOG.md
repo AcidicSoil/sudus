@@ -7,6 +7,15 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.0 - 2026-09-26
+
+Spec revision 18, on the developer's ok of 2026-09-26. The start record gains a field; earlier logs still read.
+
+- A second clone captures items into its own inbox while another clone holds the open commitment (issue #35). The log is one append-only chain that is never merged, so a capture on a clone that was not doing the work raced the clone that was: whichever pushed first won, and the repair for the other side dropped its records, which could be the commitment's own. The start record now names the clone that started it; the clone id is a random token in the clone's own `.git/config`. While that commitment is open, `sudus item` on any other clone writes that clone's inbox, `refs/sudus/inbox/<clone id>`, which only it appends to, so its push always fast-forwards.
+- `sudus push` publishes the clone's inbox after the log and then fetches every other clone's inbox; `sudus start` also installs a fetch refspec for the inboxes. `sudus show items` lists an inbox item as not on the log.
+- After Done, wake names a new action, `fold`, before any promotion. `sudus fold` appends each inbox item to the log as an ordinary item, so promotion, retirement and `wait:` work on it unchanged. An item whose slug the log or an earlier inbox holds with a different item is reported and left in its inbox; the same item in two inboxes folds once.
+- Between commitments, and under a start written before 4.2.0, every clone appends items to the log as before.
+
 ## 4.1.0 - 2026-09-26
 
 Spec revision 17, on the developer's ok of 2026-09-26. Adds a record kind; earlier logs still read.
