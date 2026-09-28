@@ -76,7 +76,7 @@
 **Use:** `tests/bench/` and targeted evaluator integration checks.
 
 - [ ] Run each available pinned backend separately on labeled agent/developer cases, contract conflicts, external-service changes, data changes, uncertain evidence, and ambiguous drafts.
-- [ ] Compare distributions, weighted score means, confidence, veto incidence, and suggestions against labels; report disagreements and unavailable cases.
+- [x] Compare distributions, weighted score means, confidence, veto incidence, and suggestions against labels; report disagreements and unavailable cases.
 - [ ] Check repeatability and whether confidence is calibrated on available labels; schema compliance alone is not accuracy evidence.
 - [x] Exercise floor, veto, unavailable, and review-model paths in real Sudus records. Model output cannot expand code-defined authority.
 - [x] **Gate:** If representative results are materially unsafe, state truncation occurs, or probability semantics cannot be validated, leave that provider unavailable and do not activate it.
@@ -95,7 +95,7 @@
 - [x] Run targeted adapter/evaluator/settings/records/init/CLI/review tests, then `npm test` and `npm run test:mod` where applicable.
 - [ ] Re-run representative cases against each real available pinned model; record command, code/weights revision, resource use, and results.
 - [x] Inspect `git diff --check`, full diff, settings transition, and reference scan; confirm unrelated files stayed untouched.
-- [ ] Report selected implementation, changed/removed files, test totals, actual semantic limits, hardware needs, and remaining risks. Distinguish mock transport tests from live-model validation.
+- [x] Report selected implementation, changed/removed files, test totals, actual semantic limits, hardware needs, and remaining risks. Distinguish mock transport tests from live-model validation.
 
 **Execution status:** Priority amended at user request. Implement Verdict → Jeff → Kev in an isolated worktree, one active backend at a time; no silent fallback.
 
