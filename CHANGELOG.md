@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.4 - 2026-09-28
+
+- A lease taken between commitments no longer reads as stale (issue #38). Preparing the next commitment under leases, as the working agreement's `record PATH` move asks, named `reconcile` for every lease because the last commitment was closed, and the fourth begin, commit and end wrote a cycle escalation that neither `instead` option could answer. `sudus begin` now records the done or superseded record that closed the last commitment, and wake treats a lease taken after it as preparation for the next start: only an ended session makes it stale. A lease the finished commitment left behind is still named `reconcile`, and so is a lease 4.2.3 took between commitments, which lacks that record; ending it is enough.
+
 ## 4.2.3 - 2026-09-27
 
 - `sudus decide`, `answer`, `realize` and `decisions --read` append to `docs/decisions.jsonl` after it holds a multi-byte character (issue #37). The check on the file's new lines cut them from the decoded text at the old file's length in bytes, so after a character such as an ellipsis the cut started inside the new line, and every later append was refused as a scope violation. The check now cuts the new lines from the bytes. A project stuck on this appends again once it runs 4.2.3.
