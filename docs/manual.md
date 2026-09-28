@@ -1332,7 +1332,7 @@ Sudus reads it back; the full field list is in
 | `answer` | Escalation sha, `ok`/`instead`/`ask`, the developer's words, developer-auth evidence. | Wake, ADR, calibration. |
 | `reply` | Escalation sha, text. | Wake, after `ask`. |
 | `read` | Decision id, developer-auth evidence. | Queue and ADR. |
-| `evaluation-intent` / `evaluation-call` / `measurement` | The evaluator's fixed request, the one attempted call, and the five scored dimensions, composite, veto and suggestion. | Escalation, decide, queue, calibration. |
+| `evaluation-intent` / `evaluation-call` / `measurement` | The evaluator's fixed request, the one attempted call with source/model/transport provenance, and the five scored dimensions, composite, veto and suggestion. | Escalation, decide, queue, calibration. |
 | `calibration` | Policy digest, sample, false-downgrade count, bound, pass/fail. | Evidence for a separately reviewed tuning change; never an automatic settings edit or authority gate. |
 | `item` | Kind (backlog/next-feature/defect), slug, source, body. | Capture, Done, next feature. |
 | `outside` | Item sha, reason. | Capture gate. |

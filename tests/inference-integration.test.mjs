@@ -44,6 +44,7 @@ test('a local verdict measurement persists the selected source/model and all fiv
     const records = (await readLog(p.cwd)).slice(-3);
     assert.deepEqual(records.map((r) => r.kind), ['evaluation-intent', 'evaluation-call', 'measurement']);
     for (const r of records) assert.equal(r.payload.source, 'verdict');
+    assert.equal(records[1].payload.transport, 'local');
     assert.equal(records[2].payload.model, s.inference.model);
     assert.equal(records[2].payload.levels.length, 5);
     const raw = JSON.parse(Buffer.from(unb64url(records[1].payload.raw)).toString());

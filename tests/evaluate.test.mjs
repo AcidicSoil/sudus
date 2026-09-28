@@ -864,7 +864,7 @@ describe('measure()', () => {
     const log = await readLog(cwd);
     assert.deepEqual(log.slice(-3).map((x) => x.kind), ['evaluation-intent', 'evaluation-call', 'measurement']);
     const [intent, call, m] = log.slice(-3);
-    assert.equal(intent.payload.source, 'verdict'); assert.equal(call.payload.source, 'verdict'); assert.equal(call.payload.outcome, 'response');
+    assert.equal(intent.payload.source, 'verdict'); assert.equal(call.payload.source, 'verdict'); assert.equal(call.payload.transport, 'local'); assert.equal(call.payload.outcome, 'response');
     assert.deepEqual(JSON.parse(Buffer.from(unb64url(call.payload.raw)).toString()).answers.evidence.probabilities, JSON.parse(goodBody()).answers.evidence.probabilities);
     assert.equal(m.payload.intent, intent.sha); assert.equal(m.payload.call, call.sha);
     assert.equal(m.payload.levels.length, 5);
@@ -1070,7 +1070,7 @@ describe('measure()', () => {
     });
     const callSha = await appendRecord(cwd, 'evaluation-call', f.slug, {
       intent: intentSha, source: 'verdict', request_digest: requestDigest(request), outcome: 'response', model: 'verdict-151m-d2528239',
-      transport: null, session: null, raw: b64url(Buffer.from(goodBody(), 'utf8')), failure_class: null,
+      transport: 'local', session: null, raw: b64url(Buffer.from(goodBody(), 'utf8')), failure_class: null,
       answers: null, usage: { input_tokens: 10, output_tokens: 2 },
     });
     const sha = await recoverMeasurement(cwd);
@@ -1079,6 +1079,8 @@ describe('measure()', () => {
     assert.equal(log.at(-1).kind, 'measurement');
     assert.equal(log.at(-1).payload.call, callSha, 'reuses the existing call record instead of writing a new one');
     assert.equal(log.at(-1).payload.outcome, 'indeterminate');
+    const recoveredCall = log.find((x) => x.kind === 'evaluation-call');
+    assert.equal(recoveredCall.payload.transport, 'local');
     assert.equal(log.filter((x) => x.kind === 'evaluation-call').length, 1, 'no duplicate call record from recovery');
     assert.equal(await recoverMeasurement(cwd), null, 'idempotent');
   });
