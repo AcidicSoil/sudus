@@ -105,12 +105,12 @@
 **Interfaces:**
 - No new runtime interface; records the implemented dataset capability and remaining human-data work.
 
-- [ ] **Step 1: Run `npm run dataset:check` and `npm run dataset:stats`**.
-- [ ] **Step 2: Run the full changed-surface test set**: `node --test tests/evaluator-dataset.test.mjs tests/bench/*.test.mjs tests/inference*.test.mjs tests/evaluate.test.mjs`.
-- [ ] **Step 3: Run `npm test`** and compare any failures with the known two baseline travel failures.
-- [ ] **Step 4: Run `npm pack --dry-run --json` and `git diff --check`**; verify the dataset/dev script is not accidentally required at runtime and no generated cache is packaged.
-- [ ] **Step 5: Update the validation research note** with exact test counts, dataset statistics, and the explicit limitation that v1 currently contains route-only legacy development seeds, not calibration/test gold.
-- [ ] **Step 6: Commit the verified documentation checkpoint** as `docs: record evaluator dataset workflow`.
+- [x] **Step 1: Run `npm run dataset:check` and `npm run dataset:stats`**.
+- [x] **Step 2: Run the full changed-surface test set**: `node --test tests/evaluator-dataset.test.mjs tests/bench/*.test.mjs tests/inference*.test.mjs tests/evaluate.test.mjs`.
+- [x] **Step 3: Run `npm test`** and compare any failures with the known two baseline travel failures.
+- [x] **Step 4: Run `npm pack --dry-run --json` and `git diff --check`**; verify the dataset/dev script is not accidentally required at runtime and no generated cache is packaged.
+- [x] **Step 5: Update the validation research note** with exact test counts, dataset statistics, and the explicit limitation that v1 currently contains route-only legacy development seeds, not calibration/test gold.
+- [x] **Step 6: Commit the verified documentation checkpoint** as `docs: record evaluator dataset workflow`.
 
 ## Unresolved product decisions
 

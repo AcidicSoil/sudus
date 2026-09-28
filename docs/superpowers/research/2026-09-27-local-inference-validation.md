@@ -90,3 +90,84 @@ Scope: this evidence establishes operational integration on this host. It does *
 - Jeff's Sudus attestation wrapper still needs a successful bounded startup and labeled run.
 - Kev needs repeatability and a substantially larger labeled sample (the configured calibration floor is 60 suggested-agent labels) before any confidence-floor or parity claim.
 - All local providers remain disabled by default. A user must deliberately configure and authorize a selected backend; schema validity or a smoke test does not activate it automatically.
+
+## Evaluator dataset v1 implementation — 2026-09-28
+
+The local-evaluator work now has a versioned dataset contract rather than relying
+only on the historical 24-row benchmark. The implementation is intentionally
+offline and did not start Verdict, Jeff, or Kev.
+
+- Specification: `docs/spec/evaluator-dataset-v1.md`.
+- Implementation plan: `docs/superpowers/plans/2026-09-28-evaluator-dataset.md`.
+- Dataset module: `lib/evaluator-dataset.mjs`.
+- Repository authoring CLI: `scripts/evaluator-dataset.mjs`.
+- Seed dataset: `evals/datasets/sudus-routing-v1/`.
+- Benchmark opt-in: `SUDUS_BENCH_DATASET=<dir>` with
+  `SUDUS_BENCH_SPLIT=development|calibration|test|ood`.
+
+### Dataset contract
+
+The v1 schema fixes the five Sudus dimensions and the four dataset splits. A
+`family_id` cannot cross splits, and identical semantic drafts cannot appear
+under different IDs. Synthetic counterfactuals must name an existing parent.
+
+Semantic cases in calibration, test, and OOD must carry adjudicated human gold:
+all five dimension values in `[0,4]`, at least two distinct annotators, a final
+route, and a rationale. The v1 manifest cannot weaken that requirement by
+removing one of the human-gold splits. Development cases may remain
+`route_only` while the rubric and corpus are being built.
+
+The current committed corpus is deliberately only a migration of the historical
+benchmark: **24 development / semantic / core cases, 12 agent and 12 developer,
+all `legacy_benchmark`, all `route_only`**. No dimension labels, annotators,
+rationales, calibration cases, locked-test cases, or OOD cases were invented.
+
+### Benchmark and scoring behavior
+
+The historical `tests/bench/scenarios.json` path remains the default.
+Dataset-backed execution is explicit and validates the dataset before a fixture
+is built or a model measurement can be spawned.
+
+Offline scoring now reports route accuracy by category and execution coverage
+separately. `unavailable` and `indeterminate` rows never become developer
+predictions. Dimension MAE is calculated only when an adjudicated human gold
+dimension and a produced model level both exist. Provider confidence semantics
+remain unchanged and are not converted into cross-provider correctness
+probabilities.
+
+The authoring CLI supports `check`, `stats`, and deterministic
+`seed-legacy`. Seeding preflights every destination file before writing, so a
+divergent curated file causes a refusal without leaving a partial manifest.
+
+### Final verification
+
+- `npm run dataset:check`: valid `sudus-routing-v1`, 24 cases.
+- Exact-final changed-surface run: **179 tests; 178 passed, 0 failed, 1 skipped**.
+- Exact-final full Node run: **1,023 tests; 1,020 passed, 2 failed, 1 skipped**.
+  The two failures are still only the two pre-existing `tests/travel.test.mjs`
+  rejection tests reproduced before this feature.
+- `npm pack --dry-run --json`: success, 66 files. The three runtime launchers
+  are present; the repository-only dataset CLI and `evals/` corpus are not
+  packaged. `lib/evaluator-dataset.mjs` is included by the existing `lib/`
+  package allowlist but is not required by the runtime inference path.
+- `git diff --check`: clean.
+- No model server was started during dataset implementation or verification.
+
+A final standards/spec review found and corrected three issues before closeout:
+empty named-path lists now match the real Sudus draft contract, legacy seeding
+preflights all writes, and the fixed v1 manifest cannot weaken human-gold
+requirements. No remaining blocking finding was identified.
+
+### Remaining data work
+
+The code path is ready for a real corpus, but the corpus is not calibrated yet.
+The next evidence-collection pass should mine real Sudus/agent traces, build
+scenario families, obtain independent human labels and adjudication, then place
+whole families into calibration, locked-test, or OOD splits. Synthetic tools
+may create controlled counterfactuals and adversarial variants, but generated
+labels do not become gold without human adjudication.
+
+Provider readiness is unchanged by this dataset work: Verdict still needs a
+non-abstaining five-dimension labeled sample, Jeff still needs a successful
+attested-wrapper labeled run, and Kev still needs repeatability plus a much
+larger human-labeled sample before calibration claims.
