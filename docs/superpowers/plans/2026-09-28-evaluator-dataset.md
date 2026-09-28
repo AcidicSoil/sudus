@@ -32,12 +32,12 @@
 - Produces: `DatasetError`, `loadDataset(dir)`, `validateDataset({manifest,cases})`, `datasetStats({manifest,cases})`, `caseFingerprint(caseRow)`.
 - Consumes: a directory containing `manifest.json` and `cases.jsonl`.
 
-- [ ] **Step 1: Add focused failing tests** for a valid minimal dataset and for duplicate IDs, family cross-split leakage, duplicate semantic drafts, invalid dimension values, synthetic-without-parent, and non-adjudicated calibration semantic rows.
-- [ ] **Step 2: Run `node --test tests/evaluator-dataset.test.mjs`** and verify failure because `lib/evaluator-dataset.mjs` does not exist.
-- [ ] **Step 3: Implement the minimum pure validator/loader/stats functions.** Reject unknown manifest/case contract values, require five dimensions only for adjudicated semantic gold, require at least two distinct annotators for adjudicated rows, and keep runtime-contract rows out of semantic-gold requirements.
-- [ ] **Step 4: Re-run the focused test** and expect all dataset contract tests to pass.
-- [ ] **Step 5: Run `node --test tests/settings.test.mjs tests/bench/scoring.test.mjs`** to ensure no existing contract changed.
-- [ ] **Step 6: Commit the passing deliverable** as `feat: add evaluator dataset contract`.
+- [x] **Step 1: Add focused failing tests** for a valid minimal dataset and for duplicate IDs, family cross-split leakage, duplicate semantic drafts, invalid dimension values, synthetic-without-parent, and non-adjudicated calibration semantic rows.
+- [x] **Step 2: Run `node --test tests/evaluator-dataset.test.mjs`** and verify failure because `lib/evaluator-dataset.mjs` does not exist.
+- [x] **Step 3: Implement the minimum pure validator/loader/stats functions.** Reject unknown manifest/case contract values, require five dimensions only for adjudicated semantic gold, require at least two distinct annotators for adjudicated rows, and keep runtime-contract rows out of semantic-gold requirements.
+- [x] **Step 4: Re-run the focused test** and expect all dataset contract tests to pass.
+- [x] **Step 5: Run `node --test tests/settings.test.mjs tests/bench/scoring.test.mjs`** to ensure no existing contract changed.
+- [x] **Step 6: Commit the passing deliverable** as `feat: add evaluator dataset contract`.
 
 ### Task 2: Deterministic legacy seed migration and dataset CLI
 
