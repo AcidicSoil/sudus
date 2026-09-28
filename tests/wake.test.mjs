@@ -245,7 +245,7 @@ test('an escalation without a final answer is Waiting with the five fields verba
 // verdict this run cannot answer, not sitting-and-waiting; section 2's exit-code table gives it
 // exit 4, distinct from exit 3's non-verdict states). A raw 'measurement' record is appended
 // directly here rather than through lib/evaluate.mjs's real measure() (which needs a full
-// typesafeai/harness fixture -- see tests/escalate.test.mjs's repoWithCommitment -- for a real
+// inference/harness fixture -- see tests/escalate.test.mjs's repoWithCommitment -- for a real
 // floor/veto outcome): wake's own 'waiting' predicate only ever reads the record's `outcome` field
 // off the log, so a fixture-shaped draft digest satisfies it without a real evaluation-intent
 // record behind it.
@@ -259,11 +259,10 @@ test('an escalation without a final answer is Waiting with the five fields verba
 // any loopRepo() fixture) stands in for it without needing a real evaluation-intent record.
 //
 // Deviation from the brief's own Step 1 snippet: its measurement literal sets `source: null`, but
-// the real 'measurement' schema (lib/records.mjs) types `source` as `oneOf('jev', 'review')`, not
-// nullable -- unlike `model`/`composite`/`veto`/`suggested`, which are genuinely nullable. `source:
-// null` throws RecordError, not merely fails the eventual assertion, so the fixture below uses
-// `source: 'jev'` instead, matching this file's existing schema-fidelity convention (every other
-// deviation comment in this file over the real record schemas the plan text approximated).
+// the real 'measurement' schema (lib/records.mjs) keeps source non-nullable. It accepts the current
+// local backends plus `review`, and deliberately retains historical `jev` for old records. `source:
+// null` throws RecordError, so this historical-shape fixture uses `source: 'jev'` rather than
+// inventing a current backend call that never occurred.
 const measurement = (r, outcome, extra = {}) => ({
   intent: r.startSha, call: null, draft_digest: 'sha256:' + 'b'.repeat(64), source: 'jev', model: null,
   levels: [], composite: null, veto: null, suggested: null, outcome, reason: `${outcome}:fixture`, ...extra,

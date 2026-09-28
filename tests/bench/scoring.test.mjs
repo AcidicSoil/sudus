@@ -14,10 +14,9 @@ describe('predictedRoute', () => {
     assert.equal(predictedRoute({ outcome: 'composite', suggested: 'agent' }), 'agent');
     assert.equal(predictedRoute({ outcome: 'composite', suggested: 'developer' }), 'developer');
   });
-  test('floor, veto, unavailable and indeterminate all predict developer, whatever suggested is', () => {
-    for (const outcome of ['floor', 'veto', 'unavailable', 'indeterminate']) {
-      assert.equal(predictedRoute({ outcome, suggested: null }), 'developer');
-    }
+  test('floor and veto force developer; unavailable and indeterminate are not predictions', () => {
+    for (const outcome of ['floor', 'veto']) assert.equal(predictedRoute({ outcome, suggested: null }), 'developer');
+    for (const outcome of ['unavailable', 'indeterminate']) assert.equal(predictedRoute({ outcome, suggested: null }), null);
   });
   // Task 2 review Minor: a composite record with no suggested route is malformed data (the real
   // finalizeMeasurement always sets suggested for a composite outcome; this only reaches a
@@ -29,6 +28,17 @@ describe('predictedRoute', () => {
 });
 
 describe('scoreRun (pure function, no file I/O)', () => {
+  test('never counts unavailable or indeterminate rows as correct developer predictions', () => {
+    const rows = [
+      { id: 'U1', expect: 'developer', category: 'infra', measurement: { outcome: 'unavailable', suggested: null, levels: [] } },
+      { id: 'I1', expect: 'developer', category: 'infra', measurement: { outcome: 'indeterminate', suggested: null, levels: [] } },
+    ];
+    const scored = scoreRun(rows);
+    assert.deepEqual(scored.overall, { correct: 0, total: 0 });
+    assert.deepEqual(scored.unavailable.map((x) => x.id), ['U1', 'I1']);
+    assert.equal(scored.confusion.developer.developer, 0);
+  });
+
   test('scores a small in-memory row set directly, without reading any file', () => {
     // Two rows, by hand: S01 (composite->agent, expect agent: correct), S03 (veto, expect
     // developer: correct). No fixture file is touched here -- scoreRun takes rows in, data out.
@@ -48,24 +58,24 @@ describe('scoreRun and scoreFromFile (no network: reads a recorded JSON file)', 
     const { meta, rows, scored } = await scoreFromFile(SAMPLE);
     assert.equal(meta.note, 'hand-built sample for scoring.test.mjs; not a live run');
     assert.equal(rows.length, 6);
-    // predicted: S01 agent(correct), S02 developer(expect agent, wrong), S03 developer(veto, correct),
-    // S04 developer(floor, correct), S05 developer(correct), S06 developer(unavailable, expect agent, wrong)
-    assert.equal(scored.overall.correct, 4); assert.equal(scored.overall.total, 6);
-    assert.equal(scored.byExpect.agent.correct, 1); assert.equal(scored.byExpect.agent.total, 3);
+    // S06 is unavailable: infrastructure failure is reported separately and never scored as a route.
+    assert.equal(scored.overall.correct, 4); assert.equal(scored.overall.total, 5);
+    assert.equal(scored.byExpect.agent.correct, 1); assert.equal(scored.byExpect.agent.total, 2);
     assert.equal(scored.byExpect.developer.correct, 3); assert.equal(scored.byExpect.developer.total, 3);
+    assert.deepEqual(scored.unavailable.map((r) => r.id), ['S06']);
   });
   test('the confusion matrix counts every (expect, predicted) pair', async () => {
     const { scored } = await scoreFromFile(SAMPLE);
     assert.equal(scored.confusion.agent.agent, 1);
-    assert.equal(scored.confusion.agent.developer, 2);
+    assert.equal(scored.confusion.agent.developer, 1);
     assert.equal(scored.confusion.developer.developer, 3);
     assert.equal(scored.confusion.developer.agent ?? 0, 0);
   });
   test('misrouted lists exactly the wrong predictions, with the deciding outcome', async () => {
     const { scored } = await scoreFromFile(SAMPLE);
-    assert.deepEqual(scored.misrouted.map((m) => m.id).sort(), ['S02', 'S06']);
-    assert.equal(scored.misrouted.find((m) => m.id === 'S02').deciding, 'composite');
-    assert.equal(scored.misrouted.find((m) => m.id === 'S06').deciding, 'unavailable');
+    assert.deepEqual(scored.misrouted.map((m) => m.id).sort(), ['S02']);
+    assert.equal(scored.misrouted[0].deciding, 'composite');
+    assert.deepEqual(scored.unavailable.map((m) => [m.id, m.deciding]), [['S06', 'unavailable']]);
   });
   test('dimension separation is the mean level per expect class, by hand from the fixture', async () => {
     const { scored } = await scoreFromFile(SAMPLE);
@@ -83,8 +93,8 @@ describe('scoreRun and scoreFromFile (no network: reads a recorded JSON file)', 
   test('renderResultsMd produces a report naming the accuracy and the misrouted ids', async () => {
     const { meta, rows, scored } = await scoreFromFile(SAMPLE);
     const text = renderResultsMd({ meta, rows, scored });
-    assert.match(text, /4\/6/);
-    assert.match(text, /S02/); assert.match(text, /S06/);
+    assert.match(text, /4\/5/);
+    assert.match(text, /Unavailable: 1/); assert.match(text, /S02/); assert.match(text, /S06/);
     assert.ok(!/[^\x00-\x7f]/.test(text));
   });
   // Task 2 review Minor: a results file with no `rows` array (truncated write, wrong file, a

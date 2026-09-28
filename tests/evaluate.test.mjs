@@ -25,7 +25,7 @@ const draft = () => ({ commitment: 'auth-tokens', concerns: ['AUTH-003'], questi
   recommendation: 'hourly', because: 'observed: node scripts/rotate.mjs prints ok', if_wrong: 'sessions drop',
   instead: 'daily', options: ['hourly', 'daily'], named_paths: ['src/auth/rotate.mjs'], cited_decisions: [] });
 const dims = () => ({ evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 });
-const settings = () => ({ typesafeai: { enabled: true, model: 'jev-1.13.0', weights: dims(), agent_ceiling: 0.35, confidence_floors: dims(),
+const settings = () => ({ inference: { enabled: true, backend: 'verdict', endpoint: 'http://127.0.0.1:8011/v1/systemone', model: 'verdict-151m-d2528239', weights: dims(), agent_ceiling: 0.35, confidence_floors: dims(),
   min_calibration_agent_predictions: 60, request_cap_bytes: 48000 }, network_exclude: ['fixtures/private/**'] });
 
 describe('policy constants and digests', () => {
@@ -42,17 +42,36 @@ describe('policy constants and digests', () => {
       'instead', 'named_paths', 'options', 'question', 'recommendation'].sort());
     assert.match(draftDigest(D), /^sha256:[0-9a-f]{64}$/);
   });
+  test('policy digest binds calibration to the active source identity only', () => {
+    const local = settings();
+    local.harness = { claude_code: { adversary_model: 'review-a', adversary_transport: 'remote' } };
+    const localDigest = policyDigest(local);
+    const localHarnessChanged = structuredClone(local);
+    localHarnessChanged.harness.claude_code.adversary_model = 'review-b';
+    assert.equal(policyDigest(localHarnessChanged), localDigest, 'inactive review configuration must not reset local calibration');
+
+    const review = structuredClone(local); review.inference.enabled = false;
+    const reviewDigest = policyDigest(review);
+    const reviewHarnessChanged = structuredClone(review);
+    reviewHarnessChanged.harness.claude_code.adversary_model = 'review-b';
+    assert.notEqual(policyDigest(reviewHarnessChanged), reviewDigest, 'review model changes must reset review calibration');
+    const dormantLocalChanged = structuredClone(review);
+    dormantLocalChanged.inference.model = 'verdict-151m-deadbeef';
+    dormantLocalChanged.inference.endpoint = 'http://127.0.0.1:8999/v1/systemone';
+    assert.equal(policyDigest(dormantLocalChanged), reviewDigest, 'inactive local runtime identity must not reset review calibration');
+  });
+
   test('policy digest changes with every covered input and nothing else', () => {
     const base = policyDigest(settings());
-    const s1 = settings(); s1.typesafeai.agent_ceiling = 0.4;
-    const s2 = settings(); s2.typesafeai.weights.evidence = 0.3;
-    const s3 = settings(); s3.typesafeai.confidence_floors.ambiguity = 0.6;
+    const s1 = settings(); s1.inference.agent_ceiling = 0.4;
+    const s2 = settings(); s2.inference.weights.evidence = 0.3;
+    const s3 = settings(); s3.inference.confidence_floors.ambiguity = 0.6;
     const s4 = settings(); s4.network_exclude = [];
-    const s5 = settings(); s5.typesafeai.model = 'jev-1.14.0';
-    const s6 = settings(); s6.typesafeai.enabled = false;
+    const s5 = settings(); s5.inference.model = 'verdict-151m-updated';
+    const s6 = settings(); s6.inference.enabled = false;
     assert.notEqual(base, policyDigest(s1)); assert.notEqual(base, policyDigest(s2)); assert.notEqual(base, policyDigest(s3));
     assert.notEqual(base, policyDigest(s4)); assert.notEqual(base, policyDigest(s5));
-    assert.equal(base, policyDigest(s6), 'enabled is a source choice, not policy');
+    assert.notEqual(base, policyDigest(s6), 'switching between a local backend and review must reset calibration');
   });
 });
 
@@ -329,14 +348,14 @@ describe('C(c) and M(D)', () => {
       (e) => e instanceof EgressError && e.klass === 'output' && e.path === '.sudus/output/report.txt',
     );
   });
-  // TYPESAFEAI_API_KEY is set to an invented, non-real placeholder for the duration of this test
+  // SUDUS_EGRESS_SECRET is set to an invented, non-real placeholder for the duration of this test
   // only, then restored -- never a real key, per the global constraint, and never printed or
   // written anywhere beyond this in-memory env var and the touched file's own throwaway fixture
   // content.
   test('a touched file containing the TypeSafe key throws EgressError classed key before it reaches state', async () => {
     const { cwd } = await makeProject();
-    const prev = process.env.TYPESAFEAI_API_KEY;
-    process.env.TYPESAFEAI_API_KEY = 'test-placeholder-key-000';
+    const prev = process.env.SUDUS_EGRESS_SECRET;
+    process.env.SUDUS_EGRESS_SECRET = 'test-placeholder-key-000';
     try {
       await mkdirAndWrite(cwd, 'src/auth/rotate.mjs', '// test-placeholder-key-000\n');
       const f = await kernelFacts(cwd, normalizeDraft(draft()));
@@ -346,7 +365,7 @@ describe('C(c) and M(D)', () => {
         (e) => e instanceof EgressError && e.klass === 'key' && e.path === 'src/auth/rotate.mjs',
       );
     } finally {
-      if (prev === undefined) delete process.env.TYPESAFEAI_API_KEY; else process.env.TYPESAFEAI_API_KEY = prev;
+      if (prev === undefined) delete process.env.SUDUS_EGRESS_SECRET; else process.env.SUDUS_EGRESS_SECRET = prev;
     }
   });
   test('the key appearing only in the diff (removed since the lease began) throws EgressError classed key on the diff', async () => {
@@ -357,8 +376,8 @@ describe('C(c) and M(D)', () => {
     await gitCmd(['commit', '-q', '-m', 'rotate'], { cwd });
     await declareAuth(cwd, 'auth', { command: 'node -e 0', inputs: ['src/auth/rotate.mjs'], documents: [], requirements: ['AUTH-003'], results: 'per-requirement', identity: {} });
     await begin(cwd, { action: 'implement', target: 'AUTH-003', touch: ['src/auth/rotate.mjs'] });
-    const prev = process.env.TYPESAFEAI_API_KEY;
-    process.env.TYPESAFEAI_API_KEY = 'test-placeholder-key-111';
+    const prev = process.env.SUDUS_EGRESS_SECRET;
+    process.env.SUDUS_EGRESS_SECRET = 'test-placeholder-key-111';
     try {
       // The key-bearing line is removed after the lease snapshot was taken: the current file text
       // no longer contains the key (the per-file content check passes), but the diff against the
@@ -371,7 +390,7 @@ describe('C(c) and M(D)', () => {
         (e) => e instanceof EgressError && e.klass === 'key' && e.path === 'diff',
       );
     } finally {
-      if (prev === undefined) delete process.env.TYPESAFEAI_API_KEY; else process.env.TYPESAFEAI_API_KEY = prev;
+      if (prev === undefined) delete process.env.SUDUS_EGRESS_SECRET; else process.env.SUDUS_EGRESS_SECRET = prev;
     }
   });
   // Not in the brief's own test list: measureState's Interfaces line and the task's own
@@ -412,7 +431,7 @@ describe('the Score request', () => {
       assert.ok(t.includes('`state.options`'), `${d} instructions missing the backticked state.options path`);
     }
     for (const d of ['evidence', 'reach', 'contract', 'surface', 'ambiguity']) assert.deepEqual(req.questions[d].criteria.length, 5);
-    assert.equal(req.model, settings().typesafeai.model);
+    assert.equal(req.model, settings().inference.model);
   });
   test('the recommended-option index in the request text tracks n, zero-based, for every option-scoped dimension', () => {
     const state = { five: { question: 'q', recommendation: 'daily', because: 'b', if_wrong: 'w', instead: 'i' }, option: { text: 'daily', diff: '', files: [], omitted: [] }, contract: {}, facts: {} };
@@ -434,7 +453,7 @@ describe('the Score request', () => {
     assert.equal(sizeCheck(settings(), small), null);
     const big = buildScoreRequest(settings(), { five: { question: 'q', recommendation: 'r', because: 'x'.repeat(200000), if_wrong: 'w', instead: 'i' }, option: { text: 'r', diff: '', files: [], omitted: [] }, contract: {}, facts: {} }, 0);
     assert.equal(sizeCheck(settings(), big), 'oversize');
-    assert.equal(sizeCheck({ typesafeai: { ...settings().typesafeai, request_cap_bytes: 10 } }, small), 'oversize');
+    assert.equal(sizeCheck({ inference: { ...settings().inference, request_cap_bytes: 10 } }, small), 'oversize');
   });
   // Fix round 1 (review Important 2): the test above only covers a clearly-small request, a
   // clearly-huge one (roughly 2.7x the state limit) and a toy request_cap_bytes: 10 override --
@@ -471,7 +490,7 @@ describe('the Score request', () => {
     // so Math.min picks this clause, and state stays unpadded so the much smaller
     // state-plus-longest-question check never fires -- only the whole-request clause is
     // under test here.
-    const highCap = { typesafeai: { ...settings().typesafeai, request_cap_bytes: requestLimit + 1000 } };
+    const highCap = { inference: { ...settings().inference, request_cap_bytes: requestLimit + 1000 } };
     const padA = requestLimit - totalBase;
     assert.equal(sizeCheck(highCap, req(padA, 0)), null);
     assert.equal(sizeCheck(highCap, req(padA + 1, 0)), 'oversize');
@@ -483,11 +502,11 @@ describe('the Score request', () => {
     assert.equal(sizeCheck(highCap, req(0, padB)), null);
     assert.equal(sizeCheck(highCap, req(0, padB + 1)), 'oversize');
 
-    // (3) settings.typesafeai.request_cap_bytes at its real value (48000, from this file's
+    // (3) settings.inference.request_cap_bytes at its real value (48000, from this file's
     // own settings() helper, not a toy override) -- no cap override; state is unpadded, so
     // it sits far under the 72000 state limit and the cap is what fires first, the way it
     // does for any project whose settings cap is this far below the token limits.
-    const cap = settings().typesafeai.request_cap_bytes;
+    const cap = settings().inference.request_cap_bytes;
     const padC = cap - totalBase;
     assert.equal(sizeCheck(settings(), req(padC, 0)), null);
     assert.equal(sizeCheck(settings(), req(padC + 1, 0)), 'oversize');
@@ -512,7 +531,7 @@ const scoreState = () => ({
 // matches the real wire shape (score, confidence, legend, probabilities) rather than the brief's
 // original (incorrect) assumption.
 const goodBody = (over = {}) => JSON.stringify({
-  model: 'jev-1.13.0',
+  model: 'verdict-151m-d2528239',
   answers: {
     evidence: { score: 3.4, confidence: 0.6, legend: {}, probabilities: { 0: 0, 1: 0, 2: 0.1, 3: 0.5, 4: 0.4 } },
     reach: { score: 0.6, confidence: 0.5, legend: {}, probabilities: { 0: 0.7, 1: 0, 2: 0.1, 3: 0.2, 4: 0 } },
@@ -549,7 +568,7 @@ describe('Score answer parsing', () => {
     const r = parseScoreAnswers(req, goodBody());
     assert.deepEqual(Object.keys(r.levels).sort(), ['ambiguity', 'contract', 'evidence', 'reach', 'surface']);
     assert.equal(r.levels.evidence, 3.4); assert.equal(r.confidences.evidence, 0.6);
-    assert.equal(r.model, 'jev-1.13.0');
+    assert.equal(r.model, 'verdict-151m-d2528239');
     assert.deepEqual(r.usage, { input_tokens: 10, output_tokens: 2 });
   });
   // Fix round 1: the review's Critical finding -- reproduced against `parseScoreAnswers` before
@@ -560,7 +579,7 @@ describe('Score answer parsing', () => {
   // (`3.44`, not a rounded `3`) exercised the way the real API actually returns them.
   test('parses a real captured jev-1.13.0 response verbatim: no type field, float scores', () => {
     const req = buildScoreRequest(settings(), scoreState(), 0);
-    const body = JSON.stringify({ model: 'jev-1.13.0', answers: realAnswers, usage: { input_tokens: 3975, output_tokens: 124 } });
+    const body = JSON.stringify({ model: 'verdict-151m-d2528239', answers: realAnswers, usage: { input_tokens: 3975, output_tokens: 124 } });
     const r = parseScoreAnswers(req, body);
     assert.equal(r.invalid, undefined);
     assert.deepEqual(r.levels, { evidence: 3.44, reach: 0.6, contract: 0.07, surface: 0.53, ambiguity: 1.02 });
@@ -605,7 +624,7 @@ describe('Score answer parsing', () => {
   test('refuses out-of-range score, confidence, a missing dimension, or malformed JSON', () => {
     const req = buildScoreRequest(settings(), scoreState(), 0);
     assert.ok(parseScoreAnswers(req, 'not json').invalid);
-    assert.ok(parseScoreAnswers(req, JSON.stringify({ model: 'jev-1.13.0', answers: {}, usage: {} })).invalid);
+    assert.ok(parseScoreAnswers(req, JSON.stringify({ model: 'verdict-151m-d2528239', answers: {}, usage: {} })).invalid);
     assert.ok(parseScoreAnswers(req, goodBody({ evidence: { score: 5, confidence: 0.6, legend: {}, probabilities: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 1 } } })).invalid);
     assert.ok(parseScoreAnswers(req, goodBody({ evidence: { score: 1, confidence: 1.5, legend: {}, probabilities: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 1 } } })).invalid);
   });
@@ -678,7 +697,7 @@ describe('veto and composite', () => {
   // confidence_floors is dims() (0.2 for every dimension), which would clear even the
   // 'under one confidence floor' case below (0.3 >= 0.2) and defeat the test's own point.
   // 0.5 floors, matching the brief, keep conf()'s 0.8 default well clear and 0.3 clearly under.
-  const suggestSettings = () => ({ typesafeai: { agent_ceiling: 0.35, confidence_floors: { evidence: 0.5, reach: 0.5, contract: 0.5, surface: 0.5, ambiguity: 0.5 } } });
+  const suggestSettings = () => ({ inference: { agent_ceiling: 0.35, confidence_floors: { evidence: 0.5, reach: 0.5, contract: 0.5, surface: 0.5, ambiguity: 0.5 } } });
   // Fix round 1 (review Minor 4): the old version of this test asserted
   // `computeComposite(levels(), dims()) === computeComposite(levels(), dims())`, which is just a
   // determinism check -- computeComposite never takes a confidences parameter at all, so no
@@ -747,7 +766,7 @@ describe('veto and composite', () => {
   });
   test('boundary: a confidence exactly at its floor still passes', () => {
     const s = suggestSettings();
-    // s.typesafeai.confidence_floors is 0.5 for every dimension (suggestSettings, above).
+    // s.inference.confidence_floors is 0.5 for every dimension (suggestSettings, above).
     assert.equal(computeSuggested(0.2, conf({ ambiguity: 0.5 }), s), 'agent', 'confidence exactly at its floor still clears it');
   });
 });
@@ -763,7 +782,7 @@ import { catCommit } from '../lib/gitx.mjs';
 // goodBody (Task 7, above) is the same five-dimension answer body this task's transport stubs
 // need; reused here rather than redefined (Minor 6, review round: the two were byte-for-byte
 // duplicates).
-const transport = (bodies) => async () => { const b = bodies.shift(); if (b instanceof Error) throw b; return { status: 200, body: b, model: 'jev-1.13.0' }; };
+const transport = (bodies) => async () => { const b = bodies.shift(); if (b instanceof Error) throw b; return { status: 200, body: b, model: 'verdict-151m-d2528239' }; };
 // Deviation from the brief text, in two parts -- both reproduced by running the brief's literal
 // fixture before this fix (task-9-report.md's RED section):
 //
@@ -819,13 +838,13 @@ const OVERVIEW_WITH_AUTH = `# Keystone
 // pinned-launch test needs) alongside its existing numeric use (min_calibration_agent_predictions,
 // the calibration tests above). Kept backward compatible by branching on typeof: every existing
 // numeric caller (`repoWithCommitment(true, 5)`, `repoWithCommitment(true, 3)`) is unaffected, and
-// an object caller gets its extra top-level settings keys merged in alongside `data`/`typesafeai`
+// an object caller gets its extra top-level settings keys merged in alongside `data`/`inference`
 // (makeProject's own settings merge is a shallow spread over DEFAULT_SETTINGS, so a sibling key
-// like `harness` merges cleanly without touching `data`/`typesafeai`).
+// like `harness` merges cleanly without touching `data`/`inference`).
 async function repoWithCommitment(enabled = true, extra = 60, files = {}) {
   const minCalibrationAgentPredictions = typeof extra === 'number' ? extra : 60;
   const extraSettings = typeof extra === 'object' && extra !== null ? extra : {};
-  const p = await makeProject({ settings: { data: ['migrations/**'], typesafeai: { enabled, model: 'jev-1.13.0', weights: dims(), agent_ceiling: 0.35, confidence_floors: dims(), min_calibration_agent_predictions: minCalibrationAgentPredictions, request_cap_bytes: 48000 }, ...extraSettings },
+  const p = await makeProject({ settings: { data: ['migrations/**'], inference: { enabled, backend: enabled ? 'verdict' : null, endpoint: enabled ? 'http://127.0.0.1:8011/v1/systemone' : null, model: 'verdict-151m-d2528239', weights: dims(), agent_ceiling: 0.35, confidence_floors: dims(), min_calibration_agent_predictions: minCalibrationAgentPredictions, request_cap_bytes: 48000 }, ...extraSettings },
     files: {
       'docs/spec/overview.md': OVERVIEW_WITH_AUTH,
       'docs/spec/auth.md': AUTH_DOMAIN,
@@ -838,15 +857,15 @@ async function repoWithCommitment(enabled = true, extra = 60, files = {}) {
 }
 
 describe('measure()', () => {
-  test('jev: intent precedes the one call; the measurement carries the composite and suggestion', async () => {
+  test('local inference: intent precedes the one call; the measurement carries the composite and suggestion', async () => {
     const cwd = await repoWithCommitment();
     const r = await measure(cwd, draft(), { transport: transport([goodBody()]) });
     assert.equal(r.outcome, 'composite'); assert.equal(r.suggested, 'agent'); assert.equal(r.veto, null);
     const log = await readLog(cwd);
     assert.deepEqual(log.slice(-3).map((x) => x.kind), ['evaluation-intent', 'evaluation-call', 'measurement']);
     const [intent, call, m] = log.slice(-3);
-    assert.equal(intent.payload.source, 'jev'); assert.equal(call.payload.source, 'jev'); assert.equal(call.payload.outcome, 'response');
-    assert.equal(Buffer.from(unb64url(call.payload.raw)).toString(), goodBody());
+    assert.equal(intent.payload.source, 'verdict'); assert.equal(call.payload.source, 'verdict'); assert.equal(call.payload.outcome, 'response');
+    assert.deepEqual(JSON.parse(Buffer.from(unb64url(call.payload.raw)).toString()).answers.evidence.probabilities, JSON.parse(goodBody()).answers.evidence.probabilities);
     assert.equal(m.payload.intent, intent.sha); assert.equal(m.payload.call, call.sha);
     assert.equal(m.payload.levels.length, 5);
     // Deviation from the brief text: the brief's own snippet calls `decodeRecord(rec)` on `rec`
@@ -867,8 +886,8 @@ describe('measure()', () => {
   // Review of 3.8.2: a 200 response that echoed the bearer key was recorded whole in
   // evaluation-call.raw, which travels with refs/sudus/log; only error bodies were redacted.
   test('a response that echoes the key is recorded without it, on a valid answer and on a model mismatch', async () => {
-    const prev = process.env.TYPESAFEAI_API_KEY;
-    process.env.TYPESAFEAI_API_KEY = 'test-placeholder-key-222';
+    const prev = process.env.SUDUS_EGRESS_SECRET;
+    process.env.SUDUS_EGRESS_SECRET = 'test-placeholder-key-222';
     try {
       const recorded = async (cwd) => (await readLog(cwd)).map((r) => JSON.stringify(r.payload) + (r.payload.raw ? Buffer.from(unb64url(r.payload.raw)).toString() : '')).join('\n');
       const a = await repoWithCommitment();
@@ -880,10 +899,10 @@ describe('measure()', () => {
       for (const cwd of [a, b]) {
         const text = await recorded(cwd);
         assert.ok(!text.includes('test-placeholder-key-222'), text);
-        assert.ok(text.includes('[redacted]'));
+        assert.equal(text.includes('[redacted]'), false, 'only whitelisted measurement values are persisted');
       }
     } finally {
-      if (prev === undefined) delete process.env.TYPESAFEAI_API_KEY; else process.env.TYPESAFEAI_API_KEY = prev;
+      if (prev === undefined) delete process.env.SUDUS_EGRESS_SECRET; else process.env.SUDUS_EGRESS_SECRET = prev;
     }
   });
   test('a veto forces developer even with a low composite', async () => {
@@ -932,7 +951,7 @@ describe('measure()', () => {
     await writeFile(join(outside, 'file.txt'), 'OUTSIDE-BYTES\n');
     await symlink(outside, join(cwd, 'linkdir'));
     let sent = null;
-    const r = await measure(cwd, { ...draft(), named_paths: ['linkdir/file.txt'] }, { transport: async (req) => { sent = req; return { status: 200, body: goodBody(), model: 'jev-1.13.0' }; } });
+    const r = await measure(cwd, { ...draft(), named_paths: ['linkdir/file.txt'] }, { transport: async (req) => { sent = req; return { status: 200, body: goodBody(), model: 'verdict-151m-d2528239' }; } });
     assert.equal(sent, null);
     assert.deepEqual([r.outcome, r.reason], ['unavailable', 'unavailable excluded: reserved linkdir/file.txt']);
   });
@@ -943,7 +962,7 @@ describe('measure()', () => {
     const cwd = await repoWithCommitment(true, { network_exclude: ['secret/**'] }, { 'secret/plain.txt': 'EXCLUDED-BYTES\n' });
     try { await lstat(join(cwd, 'SECRET/plain.txt')); } catch { t.skip('the test directory is case-sensitive'); return; }
     let sent = null;
-    const r = await measure(cwd, { ...draft(), named_paths: ['Secret/plain.txt'] }, { transport: async (req) => { sent = req; return { status: 200, body: goodBody(), model: 'jev-1.13.0' }; } });
+    const r = await measure(cwd, { ...draft(), named_paths: ['Secret/plain.txt'] }, { transport: async (req) => { sent = req; return { status: 200, body: goodBody(), model: 'verdict-151m-d2528239' }; } });
     assert.equal(sent, null);
     assert.deepEqual([r.outcome, r.reason], ['unavailable', 'unavailable excluded: network_exclude secret/plain.txt']);
   });
@@ -961,9 +980,9 @@ describe('measure()', () => {
     assert.equal(called, false); assert.equal(r.outcome, 'floor'); assert.equal(r.reason, 'floor:data');
     const log = await readLog(cwd);
     assert.deepEqual(log.slice(-2).map((x) => x.kind), ['evaluation-intent', 'measurement']);
-    assert.equal(log.at(-2).payload.source, 'jev', 'source is settled from settings before the floor is checked, never null');
+    assert.equal(log.at(-2).payload.source, 'verdict', 'source is settled from settings before the floor is checked, never null');
     assert.equal(log.at(-2).payload.request_digest, null);
-    assert.equal(log.at(-1).payload.call, null); assert.equal(log.at(-1).payload.source, 'jev'); assert.deepEqual(log.at(-1).payload.levels, []);
+    assert.equal(log.at(-1).payload.call, null); assert.equal(log.at(-1).payload.source, 'verdict'); assert.deepEqual(log.at(-1).payload.levels, []);
   });
   test('a failed transport call is unavailable <class>, recorded and routed', async () => {
     const cwd = await repoWithCommitment();
@@ -975,7 +994,7 @@ describe('measure()', () => {
   });
   test('an invalid answer is unavailable invalid, never agent or developer by suggestion', async () => {
     const cwd = await repoWithCommitment();
-    const bad = JSON.stringify({ model: 'jev-1.13.0', answers: {}, usage: {} });
+    const bad = JSON.stringify({ model: 'verdict-151m-d2528239', answers: {}, usage: {} });
     const r = await measure(cwd, draft(), { transport: transport([bad]) });
     assert.equal(r.outcome, 'unavailable'); assert.equal(r.suggested, null);
   });
@@ -1008,9 +1027,9 @@ describe('measure()', () => {
   });
   test('identity is captured before any write; equal identity and policy yield byte-identical requests', async () => {
     const cwd = await repoWithCommitment();
-    const a = []; const t = () => async (req) => { a.push(req); return { status: 200, body: goodBody(), model: 'jev-1.13.0' }; };
+    const a = []; const t = () => async (req) => { a.push(req); return { status: 200, body: goodBody(), model: 'verdict-151m-d2528239' }; };
     await measure(cwd, draft(), { transport: t() });
-    const b = []; const t2 = () => async (req) => { b.push(req); return { status: 200, body: goodBody(), model: 'jev-1.13.0' }; };
+    const b = []; const t2 = () => async (req) => { b.push(req); return { status: 200, body: goodBody(), model: 'verdict-151m-d2528239' }; };
     await measure(cwd, draft(), { transport: t2() });
     assert.equal(JSON.stringify(a[0]), JSON.stringify(b[0]));
   });
@@ -1047,10 +1066,10 @@ describe('measure()', () => {
     const intentSha = await appendRecord(cwd, 'evaluation-intent', f.slug, {
       draft_digest: draftDigest(D), snapshot: await writeWorkspaceSnapshot(cwd), log_head: logHead,
       adr_digest: await adrDigest(cwd), settings_digest: settingsDigest, policy_digest: policyDigest(settings),
-      source: 'jev', request_digest: requestDigest(request), session: null, launch: null,
+      source: 'verdict', request_digest: requestDigest(request), session: null, launch: null,
     });
     const callSha = await appendRecord(cwd, 'evaluation-call', f.slug, {
-      intent: intentSha, source: 'jev', request_digest: requestDigest(request), outcome: 'response', model: 'jev-1.13.0',
+      intent: intentSha, source: 'verdict', request_digest: requestDigest(request), outcome: 'response', model: 'verdict-151m-d2528239',
       transport: null, session: null, raw: b64url(Buffer.from(goodBody(), 'utf8')), failure_class: null,
       answers: null, usage: { input_tokens: 10, output_tokens: 2 },
     });
@@ -1111,12 +1130,12 @@ describe('measure()', () => {
   // evaluation-call (outcome: failure) the same way a transport failure is.
   test('a response naming a different model than requested is unavailable model_mismatch, recorded as a call failure', async () => {
     const cwd = await repoWithCommitment();
-    const t = () => async () => ({ status: 200, body: goodBody(), model: 'jev-9.9.9' });
+    const t = () => async () => ({ status: 200, body: goodBody(), model: 'verdict-wrong-model' });
     const r = await measure(cwd, draft(), { transport: t() });
-    assert.equal(r.outcome, 'unavailable'); assert.equal(r.reason, 'unavailable model_mismatch: got jev-9.9.9');
+    assert.equal(r.outcome, 'unavailable'); assert.equal(r.reason, 'unavailable model_mismatch');
     const call = (await readLog(cwd)).findLast((x) => x.kind === 'evaluation-call');
     assert.equal(call.payload.outcome, 'failure'); assert.equal(call.payload.failure_class, 'model_mismatch');
-    assert.equal(call.payload.model, 'jev-9.9.9', 'the actually-returned model is preserved for the audit trail');
+    assert.equal(call.payload.model, null, 'untrusted model strings must not enter durable records');
   });
   // Both sources hit the floor the same way (section 10: the floor runs "before any call", for
   // either source) -- the given test list only exercises it under jev; this confirms the review
@@ -1130,9 +1149,9 @@ describe('measure()', () => {
     assert.deepEqual(log.slice(-2).map((x) => x.kind), ['evaluation-intent', 'measurement']);
     assert.equal(log.at(-2).payload.source, 'review');
   });
-  // Egress exclusion runs before the jev/review fork (measureState is called once, ahead of the
+  // Egress exclusion runs before the local-inference/review fork (measureState is called once, ahead of the
   // `source === 'review'` pending return), so it is the one 'unavailable' outcome both sources can
-  // reach -- 'oversize' cannot (sizeCheck only runs `if (source === 'jev')`, per section 10's own
+  // reach -- 'oversize' cannot (sizeCheck only runs `if (source === 'verdict')`, per section 10's own
   // "Sudus does not separately cap [the review request's] size beyond the state it sends"), and a
   // transport failure/invalid answer/model mismatch cannot (review never calls a transport at all
   // from inside this function). Completes both-source coverage of the 'unavailable' branch.
@@ -1153,7 +1172,7 @@ describe('measure()', () => {
 // this file's own five-dimension answer body (Task 7, above) is named `goodBody()` -- reused here,
 // not redefined, the same as the existing `measure()` describe block above does.
 describe('measure() records session and launch on the intent', () => {
-  test('jev: session is recorded, launch is null', async () => {
+  test('local inference: session is recorded, launch is null', async () => {
     const cwd = await repoWithCommitment();
     await measure(cwd, draft(), { transport: transport([goodBody()]), session: 'sess-agent' });
     const intent = (await readLog(cwd)).findLast((x) => x.kind === 'evaluation-intent');
@@ -1178,7 +1197,7 @@ describe('measure() records session and launch on the intent', () => {
 // Section 9's report() refusal, mirrored for the review source's measurement completion: the
 // session that wrote the brief may not answer it, and a body model/transport that disagrees with
 // the intent's own recorded launch (when the launch pinned one) is refused the same way. Reuses
-// parseScoreAnswers and finalizeMeasurement exactly as the jev path in measure() does.
+// parseScoreAnswers and finalizeMeasurement exactly as the local-inference path in measure() does.
 import { completeReviewMeasurement } from '../lib/evaluate.mjs';
 
 // Deviation from the brief text: the brief's own Step 1 snippet spreads `...over` inside the
@@ -1202,7 +1221,7 @@ const reviewBody = (over = {}) => ({ model: 'claude-fable-5-1', session: 'sess-r
     ambiguity: { type: 'score', score: 1, confidence: 0.5, probabilities: { 0: 0.3, 1: 0.4, 2: 0.2, 3: 0.1, 4: 0 } } }, ...over });
 
 describe('completeReviewMeasurement', () => {
-  test('records the composite from the five levels, exactly like the jev path', async () => {
+  test('records the composite from the five levels, exactly like the local-inference path', async () => {
     const cwd = await repoWithCommitment(false);
     const r = await measure(cwd, draft(), { session: 'sess-agent', env: { SUDUS_HARNESS: 'claude_code' } });
     const c = await completeReviewMeasurement(cwd, r.slug, reviewBody());
@@ -1226,7 +1245,7 @@ describe('completeReviewMeasurement', () => {
     const c = await completeReviewMeasurement(cwd, r.slug, reviewBody({ model: 'anything' }));
     assert.equal(c.outcome, 'composite');
   });
-  test('an invalid answer set is unavailable invalid, same as the jev path', async () => {
+  test('an invalid answer set is unavailable invalid, same as the local-inference path', async () => {
     const cwd = await repoWithCommitment(false);
     const r = await measure(cwd, draft(), { session: 'sess-agent', env: { SUDUS_HARNESS: 'claude_code' } });
     const bad = reviewBody(); delete bad.answers.surface;
@@ -1262,7 +1281,7 @@ describe('completeReviewMeasurement', () => {
   //    otherwise indistinguishable in shape from a jev one (this task's own Global Constraints:
   //    "indistinguishable ... except source, its call record's transport/session, and model")
   //    except for those three fields, plus that the call's answers/usage/raw made it to the log.
-  test('the written measurement and call carry the same shape a jev completion would, only source/session/transport/model differ', async () => {
+  test('the written measurement and call carry the same shape a local-inference completion would, only source/session/transport/model differ', async () => {
     const cwd = await repoWithCommitment(false);
     const r = await measure(cwd, draft(), { session: 'sess-agent', env: { SUDUS_HARNESS: 'claude_code' } });
     const c = await completeReviewMeasurement(cwd, r.slug, reviewBody());
@@ -1445,7 +1464,7 @@ describe('calibration', () => {
     await labelled(cwd, 3, 'agent');
     assert.equal((await calibrate(cwd)).sample, 3);
     const { settings } = await loadSettings(cwd);
-    settings.typesafeai.agent_ceiling = 0.4;
+    settings.inference.agent_ceiling = 0.4;
     writeFileSync(join(cwd, '.sudus/settings.json'), JSON.stringify(settings, null, 2));
     assert.equal((await calibrate(cwd)).sample, 0);
   });

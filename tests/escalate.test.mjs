@@ -537,11 +537,11 @@ const dims = () => ({ evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, am
 
 // Built the same way tests/evaluate.test.mjs's own repoWithCommitment is (that helper is local
 // and unexported there, so it is not reused directly): a real domain/roadmap/overview fixture for
-// AUTH-003, authorized and started on commitment 'auth-tokens', with typesafeai enabled so
+// AUTH-003, authorized and started on commitment 'auth-tokens', with inference enabled so
 // measure() takes the jev call path this describe block's tests need.
 async function repoWithCommitment() {
   const p = await makeProject({
-    settings: { data: ['migrations/**'], typesafeai: { enabled: true, model: 'jev-1.13.0', weights: dims(),
+    settings: { data: ['migrations/**'], inference: { enabled: true, backend: 'verdict', endpoint: 'http://127.0.0.1:8011/v1/systemone', model: 'verdict-151m-d2528239', weights: dims(),
       agent_ceiling: 0.35, confidence_floors: dims(), min_calibration_agent_predictions: 60, request_cap_bytes: 48000 } },
     files: {
       'docs/spec/overview.md': OVERVIEW_WITH_AUTH,
@@ -562,14 +562,14 @@ const mdraft = (over = {}) => ({ commitment: 'auth-tokens', concerns: ['AUTH-003
   recommendation: 'hourly', because: 'observed: node scripts/rotate.mjs prints ok', if_wrong: 'sessions drop',
   instead: 'daily', options: ['hourly', 'daily'], named_paths: ['src/auth/rotate.mjs'], cited_decisions: [], ...over });
 
-const transport = (bodies) => async () => { const b = bodies.shift(); if (b instanceof Error) throw b; return { status: 200, body: b, model: 'jev-1.13.0' }; };
+const transport = (bodies) => async () => { const b = bodies.shift(); if (b instanceof Error) throw b; return { status: 200, body: b, model: 'verdict-151m-d2528239' }; };
 
 // The same five-dimension jev answer shape tests/evaluate.test.mjs's own goodBody() uses (Fix
 // round 1 there: a real jev-1.13.0 answer carries no `type` field) -- its defaults keep the
 // composite well under the 0.35 ceiling (composite 0.115, suggested 'agent'), matching the
 // baseline every override below starts from.
 const scoreBody = (over = {}) => JSON.stringify({
-  model: 'jev-1.13.0',
+  model: 'verdict-151m-d2528239',
   answers: {
     evidence: { score: 3.4, confidence: 0.6, legend: {}, probabilities: { 0: 0, 1: 0, 2: 0.1, 3: 0.5, 4: 0.4 } },
     reach: { score: 0.6, confidence: 0.5, legend: {}, probabilities: { 0: 0.7, 1: 0, 2: 0.1, 3: 0.2, 4: 0 } },

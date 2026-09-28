@@ -329,6 +329,12 @@ test('sudus declare writes a mechanism definition from a --file; a glob in input
   assert.equal(bad.code, 1);
   assert.match(bad.err, /^sudus: glob metacharacter in path "src\/\*\.mjs"/);
 });
+test('the package allowlist ships only source runtime launchers, never generated Python cache directories', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const runtime = pkg.files.filter((p) => p.startsWith('runtime/')).sort();
+  assert.deepEqual(runtime, ['runtime/jeff_server.py', 'runtime/kev_server.py', 'runtime/verdict_server.py']);
+});
 test('sudus --version prints the package version', async () => {
   const { readFile } = await import('node:fs/promises');
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
@@ -826,7 +832,7 @@ const dims = () => ({ evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, am
 // file's own comment (above) already names for this exact fixture.
 async function repoWithCommitment(enabled = true) {
   const p = await makeProject({
-    settings: { data: ['migrations/**'], typesafeai: { enabled, model: 'jev-1.13.0', weights: dims(),
+    settings: { data: ['migrations/**'], inference: { enabled, backend: enabled ? 'verdict' : null, endpoint: enabled ? 'http://127.0.0.1:8011/v1/systemone' : null, model: 'verdict-151m-d2528239', weights: dims(),
       agent_ceiling: 0.35, confidence_floors: dims(), min_calibration_agent_predictions: 60, request_cap_bytes: 48000 } },
     files: {
       'docs/spec/overview.md': OVERVIEW_WITH_AUTH,
@@ -843,10 +849,10 @@ const draft = (over = {}) => ({ commitment: 'auth-tokens', concerns: ['AUTH-003'
   recommendation: 'hourly', because: 'observed: node scripts/rotate.mjs prints ok', if_wrong: 'sessions drop',
   instead: 'daily', options: ['hourly', 'daily'], named_paths: ['src/auth/rotate.mjs'], cited_decisions: [], ...over });
 
-const transport = (bodies) => async () => { const b = bodies.shift(); if (b instanceof Error) throw b; return { status: 200, body: b, model: 'jev-1.13.0' }; };
+const transport = (bodies) => async () => { const b = bodies.shift(); if (b instanceof Error) throw b; return { status: 200, body: b, model: 'verdict-151m-d2528239' }; };
 
 const scoreBody = (over = {}) => JSON.stringify({
-  model: 'jev-1.13.0',
+  model: 'verdict-151m-d2528239',
   answers: {
     evidence: { score: 3.4, confidence: 0.6, legend: {}, probabilities: { 0: 0, 1: 0, 2: 0.1, 3: 0.5, 4: 0.4 } },
     reach: { score: 0.6, confidence: 0.5, legend: {}, probabilities: { 0: 0.7, 1: 0, 2: 0.1, 3: 0.2, 4: 0 } },
@@ -958,13 +964,13 @@ import { renderMeasureBrief, buildScoreQuestions } from '../lib/evaluate.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 
 // fakeTransportPath: writes a small ESM module whose default export replaces `post`
-// (bin/typesafeai.mjs) -- the test-only `--transport-module <path>` flag (this task) loads it the
+// (bin/inference.mjs) -- the test-only `--transport-module <path>` flag (this task) loads it the
 // same way. Called with no `await` at each call site (the task brief's own Step 1 snippet:
 // `fakeTransportPath(scoreBody())` spliced straight into an argv array), so this is deliberately
 // synchronous (Node's *Sync fs functions), not the async node:fs/promises API the rest of this
 // file otherwise prefers -- an async version would hand argv a Promise instead of a path string.
 // Echoes `request.model` back rather than a hard-coded one, so it matches whatever settings.
-// typesafeai.model the calling fixture configured (measure()'s own model-mismatch check compares
+// inference.model the calling fixture configured (measure()'s own model-mismatch check compares
 // the transport's returned model against the request's).
 function fakeTransportPath(body) {
   const dir = mkdtempSync(join(tmpdir(), 'sudus-transport-'));
@@ -985,7 +991,7 @@ describe('the measure brief and the CLI', () => {
     assert.match(text, /write its five Score answers/);
     // Fix (Important I1, final-review.md): the brief renders each dimension's actual question
     // instructions -- not just the static criteria -- taken from buildScoreQuestions, the same
-    // builder buildScoreRequest calls for the jev source, never retyped here. This proves reach,
+    // builder buildScoreRequest calls for the local inference source, never retyped here. This proves reach,
     // contract and surface carry Ruling 3's alternatives sentence and evidence/ambiguity carry
     // their own instruction text, with the backticked state paths intact.
     const questions = buildScoreQuestions(0);
@@ -993,15 +999,15 @@ describe('the measure brief and the CLI', () => {
     for (const d of ['reach', 'contract', 'surface']) assert.match(questions[d].instructions, /Compare it against the alternatives in `state\.options`\./);
     assert.match(text, /sudus measure .* --file/);
   });
-  test('sudus measure (jev source) completes synchronously and prints the outcome', async () => {
+  test('sudus measure (local inference source) completes synchronously and prints the outcome', async () => {
     const cwd = await repoWithCommitment();
     const r = await run(['measure', '--transport-module', fakeTransportPath(scoreBody()), ...draftFlags(draft())], cwd);
     assert.equal(r.code, 0, r.err);
-    // Written records, not only the printed line: a real measurement record, over the jev source,
+    // Written records, not only the printed line: a real measurement record, over the local inference source,
     // naming the same outcome the stdout line reports.
     const log = await readLog(cwd);
     const m = log.findLast((x) => x.kind === 'measurement');
-    assert.equal(m.payload.source, 'jev'); assert.equal(m.payload.outcome, 'composite'); assert.equal(m.payload.levels.length, 5);
+    assert.equal(m.payload.source, 'verdict'); assert.equal(m.payload.outcome, 'composite'); assert.equal(m.payload.levels.length, 5);
     assert.equal(m.payload.suggested, 'agent');
     // Fix round 1 (Important I3, review of commit c9a69370): every field the spec's "Record and
     // calibration" names is printed, not just outcome/levels/composite/veto -- suggested and the
@@ -1067,7 +1073,7 @@ describe('the measure brief and the CLI', () => {
     const intent = log.findLast((x) => x.kind === 'evaluation-intent');
     assert.equal(intent.payload.launch, null);
   });
-  test('sudus measure --brief on a jev-source project refuses: there is nothing to brief', async () => {
+  test('sudus measure --brief on a local-inference project refuses: there is nothing to brief', async () => {
     const cwd = await repoWithCommitment();
     const r = await run(['measure', '--brief', '--transport-module', fakeTransportPath(scoreBody()), ...draftFlags(draft())], cwd);
     assert.equal(r.code, 1); assert.match(r.err, /--brief/);

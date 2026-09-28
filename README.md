@@ -28,17 +28,17 @@ Sudus has two parts:
   checks when asked, and reports the next action.
 
 Sudus does not run the agent for you, and it calls no AI model on its own
-unless you turn on the TypeSafe evaluator in settings. At one
+unless you select and configure a local inference backend in settings. At one
 narrow kind of decision -- a Consequential choice -- the agent takes one
 measurement of its own draft before deciding: five scored dimensions and a
 composite, computed in code from the model's answers, never a verdict by
 itself. Only a fixed code floor and the measurement's own veto ever force
 that decision to you instead of the agent; every other case is the agent's
-judgment, informed by the reading. On the in-tree benchmark (24 drafts over
-one small project, `tests/bench`) the measurement's suggestion matches the
-expected route 22 times in 24; the ceiling and weights were chosen on those
-same 24 drafts, so treat the figure as in-sample, not a guarantee. You use
-your usual coding agent, and the
+judgment, informed by the reading. The historical 24-draft Jev benchmark
+under `tests/bench` matched the expected route 22 times in 24; the ceiling and
+weights were chosen on those same drafts, so that figure is in-sample evidence
+for the old Jev measurement, **not** calibration evidence for Verdict, Jeff or
+Kev. New local-backend runs are reported separately. You use your usual coding agent, and the
 agent follows the project's working agreement. The tool runs on Node and
 Git, with no build step, runtime packages, database, or service.
 
@@ -76,50 +76,61 @@ surface). Both go to you.
 
 | Source | When | What you need |
 |---|---|---|
-| Your harness's review model (default) | `typesafeai.enabled` is `false` | Nothing. `sudus measure --brief` prints a brief; a fresh session of your review model answers it into a JSON file; `sudus measure <slug> --file <path>` completes the measurement. |
-| TypeSafe's jev model | `typesafeai.enabled` is `true` | An API key from https://typesafe.ai in the environment variable `TYPESAFEAI_API_KEY`. |
+| Your harness's review model (default) | `inference.enabled` is `false` | Nothing. `sudus measure --brief` prints the brief; the separate reviewer answers it into a JSON file; `sudus measure <slug> --file <path>` completes the measurement. |
+| Explicitly selected local backend | `inference.enabled` is `true` | One compatible local `/v1/systemone` service, its exact model identifier, and the same five full Score distributions. Supported selections are `verdict`, `jeff`, and `kev` in implementation-priority order, never an automatic fallback chain. |
 
-Both sources answer the same five questions over the same state, and the
-same code computes the composite, the veto and the suggestion from their
-answers. On the in-tree benchmark they agreed on every draft compared.
+Both sources answer the same five questions. Sudus computes the floor,
+veto, composite and advisory suggestion in code; the historical Jev benchmark
+figures below are not evidence of calibration for a new backend.
 
-### Set up jev in three steps
+### Configure local inference
 
-1. Export the key in the shell that runs your agent. Sudus reads it from
-   the environment only; it never writes it to a file, a record, a log or
-   an error message.
+See the [manual runtime setup](docs/manual.md#pinned-runtime-setup-operators) for pinned source and model revisions.
+Start and validate a local service separately; the manual uses Sudus-owned
+launchers for Verdict, Jeff, and Kev so source/model/runtime identity is checked
+before decision state is sent. Do not enable a backend based only on downloaded
+weights or an endpoint that serves a different model. In
+`.sudus/settings.json`, replace the default `inference` block with the
+following example (retaining the original weights and policy fields):
 
-   ```sh
-   export TYPESAFEAI_API_KEY=your-key
-   ```
+```json
+"inference": {
+  "enabled": true,
+  "backend": "jeff",
+  "model": "jeff-gliformer-d0a4e53d",
+  "endpoint": "http://127.0.0.1:8000/v1/systemone",
+  "weights": { "evidence": 0.2, "reach": 0.2, "contract": 0.2, "surface": 0.2, "ambiguity": 0.2 },
+  "agent_ceiling": 0.35,
+  "confidence_floors": { "evidence": 0, "reach": 0, "contract": 0, "surface": 0, "ambiguity": 0 },
+  "min_calibration_agent_predictions": 60,
+  "request_cap_bytes": 48000
+}
+```
 
-2. In `.sudus/settings.json`, turn the source on with a versioned model
-   id. The other keys keep their defaults; they are the values the
-   benchmark was scored with.
+This is a **configuration illustration, not a ready-to-run deployment**.
+The local service must resolve the same pinned model ID, accept the complete
+state without truncation or unreported abstention, and return probabilities
+for levels 0–4 with a score consistent with their weighted mean. Sudus
+rejects inconsistent results and never tries a second provider. Only exact
+loopback HTTP endpoints are accepted; hosted TypeSafe credentials and its
+transport are not required. The public Verdict 151M checkpoint differs from
+the currently inaccessible Verdict 2.0 checkpoint; neither is silently
+substituted for the other. Jeff is accepted only with `temperature=1` and
+independent question isolation, because its upstream default temperature can
+make `score` differ from the weighted mean of the reported distribution.
+Normalized local responses also record the confidence statistic explicitly:
+Verdict 151M uses `distribution_concentration`, Jeff uses
+`distribution_peakedness`, and Kev uses `score_confidence`; none is silently
+treated as a calibrated probability of correctness.
 
-   ```json
-   "typesafeai": {
-     "enabled": true,
-     "model": "jev-1.13.0",
-     "weights": { "evidence": 0.2, "reach": 0.2, "contract": 0.2, "surface": 0.2, "ambiguity": 0.2 },
-     "agent_ceiling": 0.35,
-     "confidence_floors": { "evidence": 0, "reach": 0, "contract": 0, "surface": 0, "ambiguity": 0 },
-     "min_calibration_agent_predictions": 60,
-     "request_cap_bytes": 48000
-   }
-   ```
-
-3. Tell the agent. The file is protected, so the agent states the change
-   and, on your ok, binds it:
-
-   ```sh
-   sudus authorize --quote "ok, turn jev on"
-   ```
-
-That is all. From the next Consequential decision on, `sudus measure`
-sends the draft's closed state to `https://api.typesafe.ai/v1/systemone`
-and records the answer. Set `"enabled": false` to go back to the review
-model; nothing else changes.
+The settings file is protected. Have the developer authorize the changed
+settings with `sudus authorize --quote "<their approval>"` after review.
+Set `enabled: false` to use the review source. Existing projects using the
+legacy `typesafeai` block require an explicit, authorized migration to `schema: 2`: preserve
+weights, ceilings and floors, rename the block to `inference`, set `enabled`
+to `false`, and set `backend`, `model`, and `endpoint` to `null` until the
+chosen local model has passed validation. Historical `jev` records stay
+readable, but the hosted transport is not used.
 
 ### What the agent sees
 
@@ -152,7 +163,7 @@ first`.
 
 | Case | Recorded as | Who decides |
 |---|---|---|
-| No key, network down, or a rate limit after the built-in retries | `unavailable <class>` | you |
+| Local service unavailable, timed out, overloaded, or failed attestation | `unavailable <class>` | you |
 | The model's answer does not parse | `unavailable invalid` | you |
 | The request is over `request_cap_bytes` | `unavailable oversize` | you |
 | `developer: absent` (an autonomous run) and any escalation is unanswered | the escalation prints as Waiting and `sudus wake` exits 4 | the run stops |
@@ -160,9 +171,10 @@ first`.
 Nothing is retried silently, and nothing routes a floor-caught or vetoed
 draft to the agent. `sudus calibrate` reports, from decisions you later
 labelled, how often an `agent` suggestion was wrong; it tunes the numbers
-above and never gates the agent. To check the evaluator on your own key
-against the 24-draft benchmark, run `SUDUS_BENCH=1 npm run bench` from the
-checkout, one draft at a time. Every settings key is explained in the
+above and never gates the agent. To check an explicitly configured local backend against the 24-draft
+benchmark, run `SUDUS_BENCH=1 npm run bench` from the checkout, one draft at a
+time. Unavailable or indeterminate rows are reported separately and do not
+count as correct developer predictions. Every settings key is explained in the
 manual's [Settings](docs/manual.md#settings) section.
 
 ## How the work moves forward
@@ -346,7 +358,7 @@ sudus --help
 
 `sudus --help` lists every command; it works outside a project and
 changes nothing. Every key in `.sudus/settings.json`, and how to turn on
-the TypeSafe evaluator with a key from typesafe.ai, is in the manual's
+local inference and the required provider validation, is in the manual's
 [Settings](docs/manual.md#settings) section. Updates come through the marketplace (in Claude Code,
 `claude plugin update sudus@sudus`), or in Muse with
 `muse plugins update sudus`.

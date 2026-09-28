@@ -38,7 +38,7 @@ are listed near the end.
 - [Scope: work Sudus did not expect](#scope-work-sudus-did-not-expect)
 - [The evaluator: the agent's gut check](#the-evaluator-the-agents-gut-check)
 - [Settings](#settings)
-- [Turn on the TypeSafe evaluator](#turn-on-the-typesafe-evaluator)
+- [Configure local inference](#configure-local-inference)
 - [Sending the records with the code](#sending-the-records-with-the-code)
 - [Moving a project from Cairn](#moving-a-project-from-cairn)
 - [Get unstuck](#get-unstuck)
@@ -927,10 +927,10 @@ refuses it. In every other case the agent may still choose
 `sudus escalate --consequential` past a `suggested: agent` reading, at its
 own judgment.
 
-Turning on `typesafeai.enabled` in `.sudus/settings.json` picks the
-measurement's source: `jev` (`bin/typesafeai.mjs`, reading
-`TYPESAFEAI_API_KEY` from the environment and never storing it) when
-enabled, or, when it is not, the harness's own configured review model,
+Turning on `inference.enabled` in `.sudus/settings.json` selects exactly
+one named local backend (`verdict`, `jeff` or `kev`) and a loopback-only
+`/v1/systemone` endpoint. It requires no hosted TypeSafe key; disabled
+settings use the harness's own configured review model, which is
 started the same way `sudus brief` starts the adversary -- with none of the
 agent's own conversation context. Either way, every Consequential draft is
 measured; there is no off switch and no shadow mode, because a shadow
@@ -952,11 +952,14 @@ project with `developer: absent` (an autonomous benchmark configuration)
 has no one to answer an escalation the floor raises; wake prints it
 exactly as it always prints Waiting and exits 4 instead of sitting there.
 
-The benchmark under `tests/bench` (24 drafts over one small ledger project;
-`SUDUS_BENCH=1 npm run bench` with the key in the environment) scores 22 of
+The historical 24-draft Jev benchmark retained under `tests/bench` scored 22 of
 24 against the expected route. The ceiling and weights were chosen on those
-same drafts, so the figure is in-sample; rerun it after any change to the
-criteria text, the state or the settings defaults.
+same drafts, so that number is in-sample evidence for the prior Jev source, not
+a result for Verdict, Jeff or Kev. The current `SUDUS_BENCH=1 npm run bench`
+harness runs the explicitly configured local backend and writes a separate
+results directory; unavailable and indeterminate rows are reported separately
+and excluded from route accuracy. Rerun it after any change to the criteria,
+state, runtime identity or settings defaults.
 
 ## Settings
 
@@ -968,7 +971,7 @@ bound to the loop. Until then wake names the repair.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `schema` | current | The settings schema version; do not edit. |
+| `schema` | `2` | The settings schema version; do not edit. |
 | `authority_remote` | the remote `init` confirmed, or `null` | The one remote the records may be pushed to (`sudus push`). |
 | `outside`, `source`, `interfaces`, `data` | `[]` | Path globs that classify the tree: outside the agreement, source, public interfaces, data that cannot be regenerated. The floor and the scope check read them. |
 | `network_exclude` | `[]` | Path globs whose content never reaches any model, on top of the built-in credential patterns. |
@@ -977,46 +980,173 @@ bound to the loop. Until then wake names the repair.
 | `developer` | `"present"` | `"absent"` for an autonomous run: any unanswered escalation prints as Waiting and wake exits 4 instead of waiting for an answer no one can give. |
 | `adversary_rules` | absent | Optional. One-line rules the machine sets for the adversary, such as a path to stay out of or a file size it should not read. `sudus brief` prints them under Host rules, inside the brief its record digests, so you never edit the brief by hand. |
 | `harness` | `{}` | Per-harness review settings: `harness.<name>.adversary_model` (string or `null`) names the model the adversary subagent runs as in `sudus brief`'s start line, and, with `adversary_transport` (`"local"` or `"remote"`), the reviewer the evaluator's review source starts. |
-| `typesafeai.enabled` | `false` | `true` sends each Consequential measurement to TypeSafe's jev model; `false` uses your harness's review model through `sudus measure --brief`. |
-| `typesafeai.model` | `null` | The versioned model id, required when enabled: `"jev-1.13.0"` at the time of writing. An alias such as `"jev"` is refused. |
-| `typesafeai.weights` | 0.2 each | The five dimension weights (`evidence`, `reach`, `contract`, `surface`, `ambiguity`); they must sum to 1. |
-| `typesafeai.agent_ceiling` | `0.35` | The composite at or under which the suggestion is `agent`; above it, `developer`. |
-| `typesafeai.confidence_floors` | 0 each | Per-dimension minimum confidence for an `agent` suggestion. |
-| `typesafeai.min_calibration_agent_predictions` | `60` | Labelled `suggested: agent` cases `sudus calibrate` needs before it reports a pass or fail. |
-| `typesafeai.request_cap_bytes` | `48000` | The largest request the evaluator sends; a draft over it is recorded `unavailable oversize` and goes to you. |
+| `inference.enabled` | `false` | `true` selects one validated local backend; `false` uses the harness's review model. |
+| `inference.backend` | `null` | Exactly one of `verdict`, `jeff`, `kev` when enabled. No implicit fallback. |
+| `inference.model` | `null` | A pinned backend-prefixed model identifier. Aliases such as `kev-latest` are refused. |
+| `inference.endpoint` | `null` | The local service's HTTP loopback `/v1/systemone` endpoint; credentials, remote hosts, URL query and fragments are refused. |
+| `inference.weights` | 0.2 each | The five dimension weights, summing to 1. |
+| `inference.agent_ceiling` | `0.35` | Composite at or under which the suggestion is `agent`. |
+| `inference.confidence_floors` | 0 each | Per-dimension confidence minima; model-specific confidence semantics need verification. |
+| `inference.min_calibration_agent_predictions` | `60` | Labelled `suggested: agent` cases for `sudus calibrate`. |
+| `inference.request_cap_bytes` | `48000` | Byte ceiling; model-specific token capacity is an additional, mandatory no-truncation gate. |
 
-The defaults for the ceiling, weights and floors are the ones the in-tree
-benchmark (`tests/bench`) scored 22 of 24 with. Change them and rerun it.
+The defaults for the ceiling, weights and floors descend from the historical
+Jev composite that scored 22 of 24 on the in-tree benchmark. That does not
+transfer calibration to another backend. Re-run labeled evaluation for the
+selected local runtime before treating those values as calibrated.
 
-### Turn on the TypeSafe evaluator
+### Configure local inference
 
-By default the measurement comes from your harness's own review model and
-needs no account. To use TypeSafe's jev model instead:
+The normal source remains the review model. For a local backend, start a
+compatible service listening only on loopback, verify its exact pinned model,
+full input capacity, five Score probability distributions and confidence
+semantics, and evaluate representative Sudus-labelled cases first. Merely
+having an endpoint or valid JSON is not evidence of semantic calibration.
 
-1. Get an API key from https://typesafe.ai and export it in the shell that
-   runs your agent: `export TYPESAFEAI_API_KEY=...`. Sudus reads it from
-   the environment only; it never writes it to a file, a record or a log,
-   and the key never appears in an error message.
-2. In `.sudus/settings.json` set `"typesafeai": { "enabled": true, "model": "jev-1.13.0", ... }`,
-   leaving the other keys at their defaults.
-3. Tell the agent; on your ok it runs `sudus authorize --quote "<your words>"` to bind the changed settings.
-4. At the next Consequential decision the agent runs `sudus measure ...` and
-   the call goes to `https://api.typesafe.ai/v1/systemone` with the closed
-   state described above; the measurement record holds the five levels, the
-   composite, any veto and the suggestion. A transport failure, a rate limit
-   after the built-in retries, or an invalid answer is recorded as
-   `unavailable <class>` and the draft goes to you; nothing is retried
-   silently.
+The `inference` settings block is shown in the README. Set its `enabled`,
+`backend`, `model` and `endpoint` together, retain the existing policy
+parameters and have the developer authorize `.sudus/settings.json` using
+`sudus authorize --quote "<their approval>"`. A call failure is recorded
+`unavailable <class>` and never silently switches backend or retries. The
+review path is selected with `enabled: false`.
 
-Without a key, `sudus measure --brief` prints a brief and a launch block;
-a fresh session of your harness's review model answers it into a JSON file
-and `sudus measure <slug> --file <path>` completes the measurement through
-the same parser and the same composite. The two sources answer the same
-five questions over the same state; on the benchmark they agreed on every
-draft compared.
+Legacy projects whose settings contain `typesafeai` must explicitly migrate
+the protected file: bump `schema` from `1` to `2`, copy the policy parameters to `inference`, set
+`enabled: false` and `backend`, `model`, `endpoint` to `null`, then authorize
+that change. The pure `migrateLegacySettings` helper returns this disabled
+shape but never writes the file or approves the change. Historic `jev`
+records remain readable. The old hosted transport is not active.
 
-To check the evaluator against the 24-scenario benchmark on your own key:
-`SUDUS_BENCH=1 npm run bench` from the checkout, one scenario at a time.
+Verdict 151M (GLiClass/v1.4) has publicly downloadable verified weights,
+but not Verdict 2.0's correctness head. The specialized 2.0 checkpoint is
+not publicly retrievable at the documented LFS reference; these are distinct
+models. Verdict v1's explicit abstention, 512-token input, and model-specific
+confidence require safe handling. Jeff's default Score can differ from the
+reported calibrated distribution. Kev's full base checkpoint must be present,
+not only its adapter. Do not turn any of these into a production measurement
+until its actual backend has been validated against Sudus's contract and
+calibration labels. See `docs/superpowers/research/2026-09-27-verdict-checkpoint-audit.md`.
+
+#### Pinned runtime setup (operators)
+
+The following commands describe separate source checkouts; they do **not**
+activate inference in an existing Sudus project. Keep weights and runtime
+environments outside the project and check disk headroom before downloading.
+Use mise to execute the `uv` package manager in a dedicated Python environment.
+
+**Verdict 151M:** check out
+`Heman10x-NGU/openJev-verdict-2.0` at
+`bff28567cff463b833bf044f351a8b7945d53e07` with
+`GIT_LFS_SKIP_SMUDGE=1`; the missing Verdict 2.0 LFS object is not needed for
+the distinct public 151M model. Download the public artifact by revision:
+
+```sh
+hf download heman10x/rlcd-modernbert-151m \
+  model.safetensors config.json tokenizer.json tokenizer_config.json calibrator.json \
+  --revision 8af2496eb63c7fa66d7d234e1f62629380030eb4 \
+  --local-dir /path/to/verdict-151m
+sha256sum /path/to/verdict-151m/model.safetensors
+# Must equal d252823994d47a7933217fc86449493299643af6a0c0d83d6bd5a7666d3253ef
+```
+
+In a separately provisioned Python environment with the checked-out
+upstream package and `gliclass==0.1.20` installed, start Sudus's sidecar:
+
+```sh
+/path/to/venv/bin/python runtime/verdict_server.py \
+  --upstream-dir /path/to/openJev-verdict-2.0 \
+  --model-dir /path/to/verdict-151m --port 8011 --device cpu
+curl --fail http://127.0.0.1:8011/healthz
+```
+
+`runtime/verdict_server.py` verifies code and artifact hashes, binds only
+`127.0.0.1`, tokenizes *all* five questions before inference, rejects any
+input longer than its 512-token capacity, and returns 409 on abstention.
+Its `confidence` is explicitly distribution concentration, **not** the
+Verdict 2.0 correctness head or a validated Sudus correctness probability.
+The operator must evaluate representative labels before enabling it. The
+public checkpoint and the Python sidecar have been smoke-tested, but a real
+five-dimension Sudus HTTP probe abstained and did not yield a completed
+measurement.
+
+**Jeff:** the selected checkpoint is
+`knowledgator/gliformer-large-v1@d0a4e53d09cebe6bc963dd9be319d4279084bb2d`;
+source `logan-markewich/jeff@34b32f99a727c47b679adde33f4702a001e02979`.
+Download the pinned snapshot with `hf download --revision` (without
+`--local-dir` to obtain its cache snapshot path), install that source checkout's
+locked environment, and launch it through Sudus's verifier:
+
+```sh
+cd /path/to/jeff
+mise exec python@3.12 -- uv sync --no-dev
+.venv/bin/python /path/to/sudus/runtime/jeff_server.py \
+  --upstream-dir /path/to/jeff \
+  --model-dir /path/to/hub/snapshots/d0a4e53d09cebe6bc963dd9be319d4279084bb2d \
+  --port 8000
+curl --fail http://127.0.0.1:8000/sudus-healthz
+```
+
+`runtime/jeff_server.py` refuses a different or dirty source checkout or model snapshot and
+fixes the live-tested runtime to CUDA/bfloat16, eager attention, no compile or
+padding, `temperature=1`, and `isolate=all`. The untempered distribution is
+required because Jeff's upstream default can report a Score computed from a
+different distribution than the one returned; changing any of these runtime
+facts is a calibration reset. Sudus records Jeff's confidence as
+`distribution_peakedness`, matching Jeff's own formula; it is not a probability
+that the selected level is correct. Before posting decision state, the transport
+checks the Sudus attestation plus Jeff's `/healthz` and `/stats` live engine
+state. A real Git-backed Sudus smoke measurement completed through this pinned
+model with all five consistent Score distributions; that proves the protocol
+path, not Sudus-specific calibration.
+
+**Kev:** source `jaredpalmer/kev@5920c5fe4ca8e0970ed4209ac2c9b8e18bea5109`,
+checkpoint revision `485ace8703592fcf405488b262449990824cfed1`
+(`jaredpalmer/kev-4b`) and base revision
+`1001bb4d826a52d1f399e183466143f4da7b741b`
+(`Qwen/Qwen3.5-4B-Base`). The adapter snapshot and every shard in that
+exact base snapshot must be present. Install the pinned source checkout's
+locked environment and use Sudus's launcher rather than the configurable stock
+server:
+
+```sh
+# Keep a newer development checkout untouched; the launcher requires this exact source commit.
+git -C /path/to/kev worktree add --detach /path/to/kev-sudus \
+  5920c5fe4ca8e0970ed4209ac2c9b8e18bea5109
+cd /path/to/kev-sudus
+mise exec -- uv sync --extra serve
+.venv/bin/python /path/to/sudus/runtime/kev_server.py \
+  --upstream-dir /path/to/kev-sudus \
+  --checkpoint-dir /path/to/hub/snapshots/485ace8703592fcf405488b262449990824cfed1 \
+  --port 8008
+curl --fail http://127.0.0.1:8008/sudus-healthz
+```
+
+`runtime/kev_server.py` verifies the exact source commit, checkpoint provenance,
+base revision and every base shard, then fixes the live-tested runtime to CUDA,
+torch/bfloat16, SDPA, merged LoRA scale 1, checkpoint temperature
+`2.1435469250725863`, CUDA graphs off, fused kernels off and date preprocessing
+off. Kev's stock endpoint echoes the request's `model` string, so Sudus also
+checks the launcher's attestation, `/v1/models`, and the local HF snapshot before
+sending state. Kev Score confidence is recorded as `score_confidence`, matching
+Kev's published score-confidence statistic rather than a correctness
+probability. A canonical real Git-backed Sudus measurement completed with all
+five dimensions under this exact runtime; it is still not Sudus-specific
+calibration evidence.
+
+To run an isolated comparison without overwriting the historical benchmark
+receipts, select the backend explicitly:
+
+```sh
+SUDUS_BENCH=1 SUDUS_BENCH_BACKEND=verdict npm run bench
+# Other explicit choices: jeff or kev.
+# Optionally provide SUDUS_BENCH_MODEL and SUDUS_BENCH_ENDPOINT.
+```
+
+The command reports a newly created temporary results directory. A provider
+failure stays `unavailable`; it never starts another provider or retries a
+recorded decision. Set `SUDUS_EGRESS_SECRET` when a particular sensitive
+value also needs exact-value exclusion from file contents and diffs; the
+normal path-based exclusion remains in place.
 
 ## Sending the records with the code
 
@@ -1304,7 +1434,7 @@ agreement instruct the agent how to reason and when to stop.
 | Scope breaches | `lib/scope.mjs` |
 | Escalations and answers | `lib/escalate.mjs` |
 | Review, the brief, and the adversary | `lib/review.mjs` |
-| The evaluator | `lib/evaluate.mjs`, `bin/typesafeai.mjs` |
+| The evaluator | `lib/evaluate.mjs`, `bin/inference.mjs` |
 | Pushing the durable refs | `lib/travel.mjs` |
 | Starting a project and confirming behavior | `skills/new-project/SKILL.md`, `skills/existing-project/SKILL.md`, `skills/next-feature/SKILL.md` |
 | The agent's per-turn and per-project responsibilities | `skills/new-project/templates/AGENTS.md` |

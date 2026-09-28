@@ -224,7 +224,7 @@ test('measure captures the former layout\'s log head, and a CAS race on its log 
   const { cliMessage } = await import('../lib/escalate.mjs');
   const { CasError } = await import('../lib/gitx.mjs');
   const dims = () => ({ evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 });
-  const r = await loopRepo({ layout: 'cairn', settings: { data: ['migrations/**'], typesafeai: { enabled: true, model: 'jev-1.13.0', weights: dims(), agent_ceiling: 0.35, confidence_floors: dims(), min_calibration_agent_predictions: 60, request_cap_bytes: 48000 } } });
+  const r = await loopRepo({ layout: 'cairn', settings: { data: ['migrations/**'], inference: { enabled: true, backend: 'verdict', endpoint: 'http://127.0.0.1:8011/v1/systemone', model: 'verdict-151m-d2528239', weights: dims(), agent_ceiling: 0.35, confidence_floors: dims(), min_calibration_agent_predictions: 60, request_cap_bytes: 48000 } } });
   const draft = { commitment: 'first', concerns: ['DEMO-001'], question: 'Q?', recommendation: 'R', because: 'B', if_wrong: 'W', instead: 'I', options: ['R', 'I'], named_paths: ['migrations/1.sql'], cited_decisions: [] };
   // The intent record is written before any call; its log_head used to be captured from the
   // Sudus-layout ref and came back null here, which the schema refused.

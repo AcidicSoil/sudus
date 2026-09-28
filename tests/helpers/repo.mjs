@@ -59,7 +59,7 @@ export async function makeProject({ settings = {}, files = {}, layout = 'sudus' 
   for (const [path, content] of Object.entries({ ...DEFAULT_PROJECT_FILES, ...files })) await repo.write(path, content);
   await repo.commit('fixture');
   // Settings are already on disk (merged just above, so callers can override any field the
-  // init() flags don't reach, such as outside/typesafeai), so this is an "adopt existing
+  // init() flags don't reach, such as outside/inference), so this is an "adopt existing
   // settings" call: --adopt <digest> is the one flag that actually matters here (lib/init.mjs's
   // own comment on init() -- remote/attested go unused once a correct --adopt is given, but are
   // passed anyway to match a real `sudus init --remote <name> --attested --quote <words>`
