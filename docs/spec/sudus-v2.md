@@ -1890,12 +1890,18 @@ developer's `ok`, since it is public and posted under the developer's
 account, and keeps the project's code, records and secrets out of it and out
 of the searches it sends. The command also answers to its former name, `cairn`, so a shim, hook
 or working agreement written before 3.0.0 still runs. Claude Code, Codex and Muse manifests share one version. The skills also
-install through the skills CLI. The runtime is Node and Git, with no build,
-package dependency or service. Linux and macOS are supported.
+install through the skills CLI. The core kernel runtime is Node and Git, with
+no build or Node package dependency and no always-on service. An explicitly
+enabled local inference backend is optional infrastructure with its own pinned
+Python/model runtime and loopback service (section 10). Linux and macOS are
+supported.
 
-The evaluator is opt-in and makes zero, one or two POSTs per admitted draft from
-one file. The adversary is a subagent of the current harness that reads the
-project and runs nothing. Two durable refs and the clones' inboxes travel to
+The measurement is mandatory for every Consequential draft. Its local-inference
+source is opt-in: after bounded identity probes, `bin/inference.mjs` makes at
+most one model POST and never retries or switches providers. With local
+inference disabled, the review source uses the current harness instead. The
+adversary is a subagent of the current harness that reads the project and runs
+nothing. Two durable refs and the clones' inboxes travel to
 one confirmed authority remote; the action lease, transaction staging and
 cycle counter remain local.
 

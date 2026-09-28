@@ -39,8 +39,10 @@ under `tests/bench` matched the expected route 22 times in 24; the ceiling and
 weights were chosen on those same drafts, so that figure is in-sample evidence
 for the old Jev measurement, **not** calibration evidence for Verdict, Jeff or
 Kev. New local-backend runs are reported separately. You use your usual coding agent, and the
-agent follows the project's working agreement. The tool runs on Node and
-Git, with no build step, runtime packages, database, or service.
+agent follows the project's working agreement. The core Sudus kernel runs on
+Node and Git with no build step, database, or always-on service. An enabled
+local inference backend is optional infrastructure and requires its separately
+provisioned Python/model runtime described below.
 
 For example, you might agree that a form must reject an empty name. The
 agent writes a check that actually submits an empty name. Sudus records
