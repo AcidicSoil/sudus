@@ -174,11 +174,13 @@ Nothing is retried silently, and nothing routes a floor-caught or vetoed
 draft to the agent. `sudus calibrate` reports, from decisions you later
 labelled, how often an `agent` suggestion was wrong. The command records that
 evidence and never edits the settings or gates the agent; tuning weights,
-ceiling, or confidence floors is a separate reviewed settings change. To check an explicitly configured local backend against the 24-draft
+ceiling, or confidence floors is a separate reviewed settings change. To check an explicitly configured local backend against the historical 24-draft
 benchmark, run `SUDUS_BENCH=1 npm run bench` from the checkout, one draft at a
-time. Unavailable or indeterminate rows are reported separately and do not
-count as correct developer predictions. Every settings key is explained in the
-manual's [Settings](docs/manual.md#settings) section.
+time. To run the validated dataset instead, also set
+`SUDUS_BENCH_DATASET=evals/datasets/sudus-routing-v1`; `SUDUS_BENCH_SPLIT`
+defaults to `development`. Unavailable or indeterminate rows are reported
+separately and do not count as correct developer predictions. Every settings
+key is explained in the manual's [Settings](docs/manual.md#settings) section.
 
 ## How the work moves forward
 

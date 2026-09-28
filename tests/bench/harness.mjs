@@ -10,6 +10,7 @@ import { scoreRun, renderResultsMd } from './scoring.mjs';
 import { readLog } from '../../lib/records.mjs';
 import { loadSettings } from '../../lib/settings.mjs';
 import { policyDigest } from '../../lib/evaluate.mjs';
+import { loadDataset } from '../../lib/evaluator-dataset.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, '..', '..');
@@ -30,6 +31,26 @@ export function childEnv(env) {
   if (env.PATH) out.PATH = env.PATH;
   if (env.HOME) out.HOME = env.HOME;
   return out;
+}
+
+export async function loadBenchmarkScenarios(env, fallback = SCENARIOS.scenarios) {
+  if (!env.SUDUS_BENCH_DATASET) return fallback;
+  const data = await loadDataset(env.SUDUS_BENCH_DATASET);
+  const split = env.SUDUS_BENCH_SPLIT ?? 'development';
+  if (!data.manifest.splits.includes(split)) throw new BenchGuardError(`sudus bench: dataset does not declare split ${split}`);
+  const cases = data.cases.filter((row) => row.suite === 'semantic' && row.split === split);
+  if (cases.length === 0) throw new BenchGuardError(`sudus bench: dataset ${data.manifest.name} has no semantic cases in split ${split}`);
+  return cases.map((row) => ({
+    id: row.id,
+    expect: row.gold.route,
+    category: row.scenario.category,
+    draft: row.scenario.draft,
+    family_id: row.family_id,
+    split: row.split,
+    track: row.track,
+    gold: row.gold,
+    dataset_name: data.manifest.name,
+  }));
 }
 
 function draftArgs(slug, sc) {
@@ -61,8 +82,10 @@ export async function runScenarios(project, scenarios, env, { spawnImpl = defaul
   const rows = [];
   for (const sc of scenarios) {
     const { r, measurement } = await measureScenarioOnce(project, sc, env, spawnImpl);
-    rows.push(measurement ? { id: sc.id, expect: sc.expect, category: sc.category, measurement: measurement.payload }
-      : { id: sc.id, expect: sc.expect, category: sc.category, error: `no measurement record written (exit ${r.status}): ${r.stderr}` });
+    const base = { id: sc.id, expect: sc.expect, category: sc.category };
+    for (const key of ['family_id', 'split', 'track', 'gold', 'dataset_name']) if (sc[key] !== undefined) base[key] = sc[key];
+    rows.push(measurement ? { ...base, measurement: measurement.payload }
+      : { ...base, error: `no measurement record written (exit ${r.status}): ${r.stderr}` });
   }
   return rows;
 }
@@ -88,19 +111,20 @@ export function buildMeta({ settings, started, finished, sudusHead, scenarioCoun
 
 // Explicit benchmark source, local-only. Default reports go to a temporary directory
 // rather than overwrite the immutable historical Jev benchmark receipts.
-export async function runBenchmark({ env = process.env, scenarios = SCENARIOS.scenarios, spawnImpl = defaultSpawn, buildImpl = buildLedgerProject, outDir = null } = {}) {
+export async function runBenchmark({ env = process.env, scenarios = null, spawnImpl = defaultSpawn, buildImpl = buildLedgerProject, outDir = null } = {}) {
   assertBenchEnabled(env);
+  const selectedScenarios = scenarios ?? await loadBenchmarkScenarios(env);
   const startedWallMs = Date.now();
   const startedMonotonicMs = performance.now();
   const started = new Date(startedWallMs).toISOString();
   const project = await buildImpl({ backend: env.SUDUS_BENCH_BACKEND ?? 'verdict',
     model: env.SUDUS_BENCH_MODEL, endpoint: env.SUDUS_BENCH_ENDPOINT });
   const { settings } = await loadSettings(project.dir);
-  const rows = await runScenarios(project, scenarios, env, { spawnImpl });
+  const rows = await runScenarios(project, selectedScenarios, env, { spawnImpl });
   const finished = new Date(startedWallMs + Math.max(0, performance.now() - startedMonotonicMs)).toISOString();
   const measured = rows.filter((r) => r.measurement);
   const scored = scoreRun(measured);
-  const meta = buildMeta({ settings, started, finished, sudusHead: sudusHeadSha(), scenarioCount: scenarios.length, usableCount: scored.overall.total, projectDir: project.dir });
+  const meta = buildMeta({ settings, started, finished, sudusHead: sudusHeadSha(), scenarioCount: selectedScenarios.length, usableCount: scored.overall.total, projectDir: project.dir });
   const outputDir = outDir ?? mkdtempSync(join(tmpdir(), 'sudus-bench-results-'));
   await writeFile(join(outputDir, 'results.json'), JSON.stringify({ meta, rows }, null, 2) + '\n');
   await writeFile(join(outputDir, 'results.md'), renderResultsMd({ meta, rows: measured, scored }));

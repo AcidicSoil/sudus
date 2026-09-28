@@ -1141,7 +1141,18 @@ receipts, select the backend explicitly:
 SUDUS_BENCH=1 SUDUS_BENCH_BACKEND=verdict npm run bench
 # Other explicit choices: jeff or kev.
 # Optionally provide SUDUS_BENCH_MODEL and SUDUS_BENCH_ENDPOINT.
+
+# Use the versioned dataset instead of the historical scenarios file.
+SUDUS_BENCH=1 SUDUS_BENCH_BACKEND=verdict \
+  SUDUS_BENCH_DATASET=evals/datasets/sudus-routing-v1 \
+  SUDUS_BENCH_SPLIT=development npm run bench
 ```
+
+`SUDUS_BENCH_DATASET` is opt-in. The harness validates the manifest/cases before
+building the fixture or sending a measurement. It selects semantic cases from
+`SUDUS_BENCH_SPLIT`, which defaults to `development`, and refuses an empty or
+invalid split. The current v1 dataset contains only the 24 route-only legacy
+development seeds; it does not contain calibration/test/OOD human gold yet.
 
 The command reports a newly created temporary results directory. A provider
 failure stays `unavailable`; it never starts another provider or retries a

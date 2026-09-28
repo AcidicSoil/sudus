@@ -71,12 +71,12 @@
 - New explicit environment inputs: `SUDUS_BENCH_DATASET=<dir>`, optional `SUDUS_BENCH_SPLIT=<development|calibration|test|ood>`.
 - Dataset cases map to the existing benchmark scenario shape while retaining `family_id`, `split`, and gold dimension metadata in result rows.
 
-- [ ] **Step 1: Add failing harness tests** proving an explicit dataset+split selects only matching semantic cases, preserves family/gold metadata, and rejects an invalid dataset before spawning any measure process.
-- [ ] **Step 2: Run `node --test tests/bench/harness.test.mjs`** and verify the missing dataset-selection behavior fails.
-- [ ] **Step 3: Implement dataset selection** using `loadDataset`; keep the current hard-coded scenario default when `SUDUS_BENCH_DATASET` is absent.
-- [ ] **Step 4: Re-run the focused harness tests** and expect pass.
-- [ ] **Step 5: Run `node --test tests/bench/*.test.mjs tests/evaluator-dataset.test.mjs`**.
-- [ ] **Step 6: Commit the passing deliverable** as `feat: run benchmarks from evaluator datasets`.
+- [x] **Step 1: Add failing harness tests** proving an explicit dataset+split selects only matching semantic cases, preserves family/gold metadata, and rejects an invalid dataset before spawning any measure process.
+- [x] **Step 2: Run `node --test tests/bench/harness.test.mjs`** and verify the missing dataset-selection behavior fails.
+- [x] **Step 3: Implement dataset selection** using `loadDataset`; keep the current hard-coded scenario default when `SUDUS_BENCH_DATASET` is absent.
+- [x] **Step 4: Re-run the focused harness tests** and expect pass.
+- [x] **Step 5: Run `node --test tests/bench/*.test.mjs tests/evaluator-dataset.test.mjs`**.
+- [x] **Step 6: Commit the passing deliverable** as `feat: run benchmarks from evaluator datasets`.
 
 ### Task 4: Gold-aware offline scoring
 

@@ -6,10 +6,10 @@
 // the same project-building function build.test.mjs already exercises.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { assertBenchEnabled, BenchGuardError, runBenchmark, runScenarios, childEnv, buildMeta } from './harness.mjs';
+import { assertBenchEnabled, BenchGuardError, runBenchmark, runScenarios, childEnv, buildMeta, loadBenchmarkScenarios } from './harness.mjs';
 import { buildLedgerProject } from './build.mjs';
 import { appendRecord } from '../../lib/records.mjs';
 
@@ -27,6 +27,30 @@ function measurementPayload({ outcome, reason, suggested = null }) {
 const RATE_LIMITED = measurementPayload({ outcome: 'unavailable', reason: 'unavailable overloaded' });
 const SUCCESS = (suggested) => measurementPayload({ outcome: 'composite', reason: 'composite 0.100 <= 0.35, confidences ok', suggested });
 
+
+function writeDataset(dir, cases) {
+  mkdirSync(dir, { recursive: true });
+  const manifest = {
+    schema: 1, name: 'harness-test',
+    dimensions: ['evidence', 'reach', 'contract', 'surface', 'ambiguity'],
+    splits: ['development', 'calibration', 'test', 'ood'],
+    suites: ['semantic', 'runtime_contract'],
+    rules: { family_disjoint_splits: true, human_gold_splits: ['calibration', 'test', 'ood'] },
+  };
+  writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  writeFileSync(join(dir, 'cases.jsonl'), cases.map((x) => JSON.stringify(x)).join('\n') + '\n');
+}
+
+function datasetCase(id, split, route, question = `question ${id}`) {
+  return {
+    schema: 1, id, family_id: `family:${id}`, split, suite: 'semantic', track: 'core',
+    provenance: { kind: 'human_authored', source: 'test', source_id: id, derived_from: [] },
+    scenario: { category: 'dataset-test', draft: { concerns: ['EXP-001'], question, recommendation: 'r', because: 'b', if_wrong: 'w', instead: 'i', options: ['r'], paths: ['src/ledger.mjs'] } },
+    gold: split === 'development'
+      ? { route, dimensions: null, label_status: 'route_only', annotators: [], adjudicated: false, rationale: null }
+      : { route, dimensions: { evidence: 1, reach: 2, contract: 3, surface: 1, ambiguity: 2 }, label_status: 'adjudicated', annotators: ['a', 'b'], adjudicated: true, rationale: 'human gold' },
+  };
+}
 function fakeScenario(id, expect, concern) {
   return { id, expect, category: 'dry', draft: { concerns: [concern], question: 'q', recommendation: 'r', because: 'b', if_wrong: 'w', instead: 'i', options: ['r'], paths: ['p'] } };
 }
@@ -205,5 +229,45 @@ describe('runBenchmark: guard, build, run, score and write (dry: fake spawn, no 
     assert.match(md, /Route accuracy/);
     assert.match(md, /2\/2/);
     assert.ok(!/[^\x00-\x7f]/.test(md));
+  });
+});
+
+
+describe('dataset-backed benchmark selection', () => {
+  test('selects only semantic cases from the requested split and preserves gold metadata', async () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'sudus-bench-dataset-')), 'dataset');
+    writeDataset(dir, [datasetCase('DEV1', 'development', 'agent'), datasetCase('TEST1', 'test', 'developer')]);
+    const selected = await loadBenchmarkScenarios({ SUDUS_BENCH_DATASET: dir, SUDUS_BENCH_SPLIT: 'test' });
+    assert.equal(selected.length, 1);
+    assert.equal(selected[0].id, 'TEST1');
+    assert.equal(selected[0].expect, 'developer');
+    assert.equal(selected[0].family_id, 'family:TEST1');
+    assert.equal(selected[0].split, 'test');
+    assert.deepEqual(selected[0].gold.dimensions, { evidence: 1, reach: 2, contract: 3, surface: 1, ambiguity: 2 });
+  });
+
+  test('runScenarios retains dataset family, split, track and gold metadata in result rows', async () => {
+    const project = await buildLedgerProject();
+    const sc = { ...fakeScenario('X1', 'agent', 'EXP-001'), family_id: 'family:X1', split: 'development', track: 'core', gold: { dimensions: null, label_status: 'route_only' } };
+    const spawnImpl = async (_cmd, _args, opts) => { await appendRecord(opts.cwd, 'measurement', project.slug, SUCCESS('agent')); return { status: 0, stderr: '' }; };
+    const [result] = await runScenarios(project, [sc], { SUDUS_BENCH: '1' }, { spawnImpl });
+    assert.equal(result.family_id, 'family:X1');
+    assert.equal(result.split, 'development');
+    assert.equal(result.track, 'core');
+    assert.deepEqual(result.gold, { dimensions: null, label_status: 'route_only' });
+  });
+
+  test('invalid explicit dataset fails before project build or model spawn', async () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'sudus-bench-invalid-dataset-')), 'dataset');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'manifest.json'), '{}\n');
+    writeFileSync(join(dir, 'cases.jsonl'), '');
+    let built = false;
+    await assert.rejects(runBenchmark({
+      env: { SUDUS_BENCH: '1', SUDUS_BENCH_DATASET: dir },
+      buildImpl: async () => { built = true; throw new Error('must not build'); },
+      spawnImpl: async () => { throw new Error('must not spawn'); },
+    }), /manifest/);
+    assert.equal(built, false);
   });
 });
