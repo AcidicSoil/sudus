@@ -424,7 +424,7 @@ authority remote; an evaluator `weight`, `agent_ceiling` or confidence floor
 outside `[0,1]`; `enabled: true` without a model; `request_cap_bytes` above
 64,000; an `inference.mode` field at all; or `developer` set to anything but
 `"present"` or `"absent"`. `enabled: true` also requires exactly one of
-`verdict`, `jeff`, or `kev`, an exact loopback `/v1/systemone` endpoint with
+`verdict`, `jeff`, or `kev`, an exact literal-loopback (`127.0.0.1` or `[::1]`) `/v1/systemone` endpoint with
 no credentials, and a backend-prefixed pinned model ID rather than an alias,
 since a calibration record is bound to one resolved model/runtime contract.
 Unknown values fail closed. The evaluator's `code_tiers` field stays

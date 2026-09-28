@@ -112,7 +112,7 @@ The local service must resolve the same pinned model ID, accept the complete
 state without truncation or unreported abstention, and return probabilities
 for levels 0–4 with a score consistent with their weighted mean. Sudus
 rejects inconsistent results and never tries a second provider. Only exact
-loopback HTTP endpoints are accepted; hosted TypeSafe credentials and its
+literal loopback HTTP endpoints (`127.0.0.1` or `[::1]`) are accepted; hosted TypeSafe credentials and its
 transport are not required. The public Verdict 151M checkpoint differs from
 the currently inaccessible Verdict 2.0 checkpoint; neither is silently
 substituted for the other. Jeff is accepted only with `temperature=1` and

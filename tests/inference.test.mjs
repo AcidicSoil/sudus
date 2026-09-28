@@ -39,7 +39,7 @@ const rejects = (p, klass) => assert.rejects(p, (e) => e instanceof InferenceErr
 test('requires explicit backend and pinned model; never uses a hosted endpoint', async () => {
   await rejects(post(request()), 'config');
   await rejects(post(request(), opts(fake(body()), { backend: 'unknown' })), 'config');
-  for (const endpoint of ['https://api.typesafe.ai/v1/systemone', 'http://localhost.evil.test/v1/systemone', 'http://127.0.0.1:8000/other', 'http://u:p@127.0.0.1:8000/v1/systemone']) {
+  for (const endpoint of ['https://api.typesafe.ai/v1/systemone', 'http://localhost.evil.test/v1/systemone', 'http://localhost:8000/v1/systemone', 'http://127.0.0.1:8000/other', 'http://u:p@127.0.0.1:8000/v1/systemone']) {
     await rejects(post(request(), opts(fake(body()), { endpoint })), 'config');
   }
   await rejects(post({ ...request(), model: 'jev-latest' }, opts(fake(body()))), 'config');

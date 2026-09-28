@@ -95,7 +95,7 @@ async function readBounded(response, cap) {
 function loopback(endpoint) {
   try {
     const u = new URL(endpoint);
-    if (u.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(u.hostname) ||
+    if (u.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(u.hostname) ||
       u.pathname !== '/v1/systemone' || u.search || u.hash || u.username || u.password) return false;
     return true;
   } catch { return false; }

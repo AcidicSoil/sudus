@@ -983,7 +983,7 @@ bound to the loop. Until then wake names the repair.
 | `inference.enabled` | `false` | `true` selects one validated local backend; `false` uses the harness's review model. |
 | `inference.backend` | `null` | Exactly one of `verdict`, `jeff`, `kev` when enabled. No implicit fallback. |
 | `inference.model` | `null` | A pinned backend-prefixed model identifier. Aliases such as `kev-latest` are refused. |
-| `inference.endpoint` | `null` | The local service's HTTP loopback `/v1/systemone` endpoint; credentials, remote hosts, URL query and fragments are refused. |
+| `inference.endpoint` | `null` | The local service's HTTP literal-loopback (`127.0.0.1` or `[::1]`) `/v1/systemone` endpoint; credentials, remote hosts, URL query and fragments are refused. |
 | `inference.weights` | 0.2 each | The five dimension weights, summing to 1. |
 | `inference.agent_ceiling` | `0.35` | Composite at or under which the suggestion is `agent`. |
 | `inference.confidence_floors` | 0 each | Per-dimension confidence minima; model-specific confidence semantics need verification. |

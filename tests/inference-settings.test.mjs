@@ -25,6 +25,7 @@ test('accepts each explicitly pinned local backend', () => {
 test('rejects remote hosts, credentials, alias, model mismatch and omitted selection', () => {
   for (const [backend, model, endpoint] of [
     ['verdict', 'verdict-151m', 'https://api.typesafe.ai/v1/systemone'],
+    ['jeff', 'jeff-gliformer-d0a4e53d', 'http://localhost:8000/v1/systemone'],
     ['jeff', 'jev-latest', 'http://127.0.0.1:8000/v1/systemone'],
     ['kev', 'kev-latest', 'http://127.0.0.1:8008/v1/systemone'],
     ['verdict', 'jeff-v1', 'http://127.0.0.1:8011/v1/systemone'],
