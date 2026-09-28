@@ -622,9 +622,10 @@ from one source or the other; only the source is optional.
 
 **Calibration.** A record over developer-labelled measurements, bound to one
 evaluation-policy digest. It states the conditional sample, error count,
-confidence bound and pass or fail result. It tunes the composite's `weights`,
-`agent_ceiling` and `confidence_floors` offline, from recorded dimension
-levels; it does not gate whether the agent may decide.
+confidence bound and pass or fail result. It is evidence for tuning the
+composite's `weights`, `agent_ceiling` and `confidence_floors` offline from
+recorded dimension levels; the `sudus calibrate` command itself does not edit
+settings, and calibration does not gate whether the agent may decide.
 
 Revised 2026-09-19: previously "developer-labelled shadow evaluations."
 Shadow is no longer the default source of labelled data (section 10), and a
@@ -1852,10 +1853,11 @@ the developer. Its denominator is labelled cases whose suggestion was
 one-sided 95% exact binomial upper bound on the false-downgrade rate is a
 kernel constant, not a setting, fixed at 5%; the sample floor is
 `min_calibration_agent_predictions` (default 60) predicted-agent cases.
-Calibration tunes `weights`, `agent_ceiling` and `confidence_floors`; it does
-not gate whether the agent may decide, because gating live routing behind a
-calibration pass is what produced zero agent routing under the superseded
-design. Supersessions are not labels.
+Calibration evidence may inform a separately reviewed change to `weights`,
+`agent_ceiling` and `confidence_floors`; `sudus calibrate` itself only records
+the sample and bound. Calibration does not gate whether the agent may decide,
+because gating live routing behind a calibration pass is what produced zero
+agent routing under the superseded design. Supersessions are not labels.
 
 Revised 2026-09-19: previously "Unread Consequential decisions at Done
 disable the evaluator next commitment until read, routing every draft to the

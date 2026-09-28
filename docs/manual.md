@@ -945,8 +945,9 @@ sudus calibrate
 reports how many developer-labelled, `suggested: agent` measurements exist
 and how many you later called wrong. It passes when the one-sided 95% upper
 bound on that false-downgrade rate stays under the fixed 5% cap.
-It tunes `weights`, `agent_ceiling` and `confidence_floors` in
-`.sudus/settings.json`; it does not gate whether the agent may decide --
+It does not edit `weights`, `agent_ceiling` or `confidence_floors` in
+`.sudus/settings.json`; it records evidence that can inform a separate,
+reviewed settings change. It also does not gate whether the agent may decide --
 that gate was tried too, and it produced the same zero-routing result. A
 project with `developer: absent` (an autonomous benchmark configuration)
 has no one to answer an escalation the floor raises; wake prints it
@@ -1290,7 +1291,7 @@ prints one with its references resolved.
 | `decide --consequential --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> [--option <t>...] [--path <file>...] [--decision <id>...]` | Record a measured work-loop Consequential decision; the agent continues. Refused without a current `composite`-outcome measurement: `sudus: no measurement for this exact draft; run sudus measure first` when the draft differs from the one measured, or a message naming the floor or veto that caught it. |
 | `realize <decision-id> --subject <text>` | Record that a Consequential decision was built. |
 | `escalate [--consequential] --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> [--option <t>...] [--path <file>...] [--decision <id>...]` | Raise a decision; without `--consequential`, a Blocking one (the agent stops). With `--consequential`, the Consequential draft's own measurement forced it here, or the agent chose to. |
-| `calibrate` | Report how many labelled, suggested-agent measurements exist and how many were wrong, against the fixed bound; tunes the composite, never gates it. |
+| `calibrate` | Report and record how many labelled, suggested-agent measurements exist and how many were wrong, against the fixed bound; it never edits settings or gates authority. |
 | `measure [--brief] [--harness <name>] --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> --option <t>... [--path <file>...] [--decision <id>...]` \| `measure <slug> --file <path>` | Take one measurement of a Consequential draft before `decide` or `escalate`; `--brief` prints a launch block for the review source, `--file` completes it. |
 | `answer <slug> ok\|instead\|ask --quote <words> [--escalation <sha>]` | The developer's answer to an escalation, in their own words. |
 | `reply <slug> <text> [--escalation <sha>]` | The agent's explanation after a developer `ask`. |
@@ -1332,7 +1333,7 @@ Sudus reads it back; the full field list is in
 | `reply` | Escalation sha, text. | Wake, after `ask`. |
 | `read` | Decision id, developer-auth evidence. | Queue and ADR. |
 | `evaluation-intent` / `evaluation-call` / `measurement` | The evaluator's fixed request, the one attempted call, and the five scored dimensions, composite, veto and suggestion. | Escalation, decide, queue, calibration. |
-| `calibration` | Policy digest, sample, false-downgrade count, bound, pass/fail. | Tuning `weights`, `agent_ceiling` and `confidence_floors`; never a gate. |
+| `calibration` | Policy digest, sample, false-downgrade count, bound, pass/fail. | Evidence for a separately reviewed tuning change; never an automatic settings edit or authority gate. |
 | `item` | Kind (backlog/next-feature/defect), slug, source, body. | Capture, Done, next feature. |
 | `outside` | Item sha, reason. | Capture gate. |
 | `retirement` | Item shas, the developer's evidence. | Promotion, Done, next feature. |
