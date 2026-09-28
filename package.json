@@ -12,7 +12,9 @@
     "test": "node --test tests/*.test.mjs tests/*.test.ts tests/bench/*.test.mjs",
     "bench": "node tests/bench/harness.mjs",
     "test:mod": "node scripts/test-mod.mjs",
-    "test:dataset": "node --test tests/evaluator-dataset.test.mjs"
+    "test:dataset": "node --test tests/evaluator-dataset.test.mjs",
+    "dataset:check": "node scripts/evaluator-dataset.mjs check evals/datasets/sudus-routing-v1",
+    "dataset:stats": "node scripts/evaluator-dataset.mjs stats evals/datasets/sudus-routing-v1"
   },
   "engines": {
     "node": ">=24"

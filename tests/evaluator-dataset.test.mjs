@@ -140,3 +140,71 @@ describe('evaluator dataset v1 contract', () => {
     assert.doesNotThrow(() => validateDataset({ manifest: manifest(), cases: [runtime] }));
   });
 });
+
+import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = join(HERE, '..');
+const DATASET_CLI = join(REPO, 'scripts', 'evaluator-dataset.mjs');
+const LEGACY_SCENARIOS = join(REPO, 'tests', 'bench', 'scenarios.json');
+
+function runDatasetCli(args) {
+  return spawnSync(process.execPath, [DATASET_CLI, ...args], { cwd: REPO, encoding: 'utf8' });
+}
+
+describe('legacy benchmark seed migration CLI', () => {
+  test('seeds all 24 historical cases as development route-only gold without invented dimensions', async () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'sudus-eval-seed-')), 'sudus-routing-v1');
+    const r = runDatasetCli(['seed-legacy', 'tests/bench/scenarios.json', dir]);
+    assert.equal(r.status, 0, r.stderr);
+    const data = await loadDataset(dir);
+    assert.equal(data.cases.length, 24);
+    assert.equal(data.cases.filter((x) => x.gold.route === 'agent').length, 12);
+    assert.equal(data.cases.filter((x) => x.gold.route === 'developer').length, 12);
+    assert.ok(data.cases.every((x) => x.split === 'development'));
+    assert.ok(data.cases.every((x) => x.suite === 'semantic' && x.track === 'core'));
+    assert.ok(data.cases.every((x) => x.provenance.kind === 'legacy_benchmark'));
+    assert.ok(data.cases.every((x) => x.gold.label_status === 'route_only' && x.gold.dimensions === null));
+    assert.ok(data.cases.every((x) => x.gold.annotators.length === 0 && x.gold.rationale === null));
+  });
+
+  test('is byte-stable when rerun against the same generated destination', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'sudus-eval-seed-stable-')), 'sudus-routing-v1');
+    const first = runDatasetCli(['seed-legacy', 'tests/bench/scenarios.json', dir]);
+    assert.equal(first.status, 0, first.stderr);
+    const beforeManifest = readFileSync(join(dir, 'manifest.json'));
+    const beforeCases = readFileSync(join(dir, 'cases.jsonl'));
+    const second = runDatasetCli(['seed-legacy', 'tests/bench/scenarios.json', dir]);
+    assert.equal(second.status, 0, second.stderr);
+    assert.deepEqual(readFileSync(join(dir, 'manifest.json')), beforeManifest);
+    assert.deepEqual(readFileSync(join(dir, 'cases.jsonl')), beforeCases);
+  });
+
+  test('refuses to overwrite divergent dataset files', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'sudus-eval-seed-refuse-')), 'sudus-routing-v1');
+    const first = runDatasetCli(['seed-legacy', 'tests/bench/scenarios.json', dir]);
+    assert.equal(first.status, 0, first.stderr);
+    writeFileSync(join(dir, 'cases.jsonl'), '{"curated":true}\n');
+    const second = runDatasetCli(['seed-legacy', 'tests/bench/scenarios.json', dir]);
+    assert.notEqual(second.status, 0);
+    assert.match(second.stderr, /refus.*overwrite|diverg/i);
+  });
+
+  test('check validates and stats reports deterministic dataset counts', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'sudus-eval-seed-cli-')), 'sudus-routing-v1');
+    assert.equal(runDatasetCli(['seed-legacy', 'tests/bench/scenarios.json', dir]).status, 0);
+    const check = runDatasetCli(['check', dir]);
+    assert.equal(check.status, 0, check.stderr);
+    assert.match(check.stdout, /valid sudus-routing-v1: 24 cases/);
+    const stats = runDatasetCli(['stats', dir]);
+    assert.equal(stats.status, 0, stats.stderr);
+    const parsed = JSON.parse(stats.stdout);
+    assert.equal(parsed.total, 24);
+    assert.deepEqual(parsed.by_split, { development: 24 });
+    assert.deepEqual(parsed.by_route, { agent: 12, developer: 12 });
+    assert.deepEqual(parsed.by_label_status, { route_only: 24 });
+  });
+});

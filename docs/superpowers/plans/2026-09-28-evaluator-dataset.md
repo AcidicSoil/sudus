@@ -52,12 +52,12 @@
 - CLI: `node scripts/evaluator-dataset.mjs check <dataset-dir>`; `stats <dataset-dir>`; `seed-legacy <scenarios.json> <dataset-dir>`.
 - Migration output: one development/semantic/core/legacy case per existing scenario, route-only gold, no fabricated dimension labels or annotators.
 
-- [ ] **Step 1: Add failing tests** that seed a temporary dataset from `tests/bench/scenarios.json`, assert 24 rows, balanced 12/12 routes, development-only split, route-only gold, and byte-stable rerun output.
-- [ ] **Step 2: Run the focused test** and verify the CLI/migration behavior is absent.
-- [ ] **Step 3: Implement the CLI and deterministic migration**, then generate the committed v1 manifest/cases with the tool itself.
-- [ ] **Step 4: Run `npm run dataset:check` and `npm run dataset:stats`** and verify the committed dataset is valid and reports 24 legacy development cases.
-- [ ] **Step 5: Re-run `node --test tests/evaluator-dataset.test.mjs tests/bench/build.test.mjs`**.
-- [ ] **Step 6: Commit the passing deliverable** as `feat: seed evaluator dataset from benchmark cases`.
+- [x] **Step 1: Add failing tests** that seed a temporary dataset from `tests/bench/scenarios.json`, assert 24 rows, balanced 12/12 routes, development-only split, route-only gold, and byte-stable rerun output.
+- [x] **Step 2: Run the focused test** and verify the CLI/migration behavior is absent.
+- [x] **Step 3: Implement the CLI and deterministic migration**, then generate the committed v1 manifest/cases with the tool itself.
+- [x] **Step 4: Run `npm run dataset:check` and `npm run dataset:stats`** and verify the committed dataset is valid and reports 24 legacy development cases.
+- [x] **Step 5: Re-run `node --test tests/evaluator-dataset.test.mjs tests/bench/build.test.mjs`**.
+- [x] **Step 6: Commit the passing deliverable** as `feat: seed evaluator dataset from benchmark cases`.
 
 ### Task 3: Dataset-backed benchmark selection
 
