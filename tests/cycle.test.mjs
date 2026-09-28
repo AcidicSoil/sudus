@@ -247,3 +247,41 @@ test('a new commitment resets the administrative cycle counter: counts from a cl
   for (let n = 0; n < 3; n++) assert.deepEqual((await settle(r.cwd, V(n % 2 ? 'record' : 'declare', 'DEMO-001'), st)).bound, null);
   assert.equal((await r.log()).filter((x) => x.kind === 'escalation').length, 0);
 });
+
+// Issue #38: between commitments the next one is prepared under leases, as the working agreement's
+// record move asks. Each such lease read as stale ("the commitment is closed"), so every begin,
+// commit and end named reconcile once, and the fourth wrote a cycle escalation nobody could act on.
+test('preparing the next commitment under leases after Done names no reconcile and writes no cycle escalation (issue #38)', async () => {
+  const { done } = await import('../lib/commitment.mjs');
+  const r = await loopRepo();
+  await r.passReq('DEMO-001'); await r.review(); await r.report();
+  await done(r.cwd, 'first');
+  const sudus = async (...argv) => {
+    let out = '';
+    const code = await main(argv, { cwd: r.cwd, stdout: { write: (s) => { out += s; } }, stderr: { write: (s) => { out += s; } } });
+    return { code, out };
+  };
+  for (let n = 1; n <= 4; n++) {
+    const b = await sudus('begin', 'implement', 'DEMO-001');
+    assert.equal(b.code, 0, b.out);
+    await r.write('src/demo.mjs', `console.log("hello ${n}");\n`);
+    const held = await verdictOf(await readState(r.cwd));
+    assert.notEqual(held.action, 'reconcile', held.reason);
+    await r.commit(`prepare ${n}`);
+    const e = await sudus('end', '--lease', b.out.trim().split(/\s+/).at(-1));
+    assert.equal(e.code, 0, e.out);
+  }
+  assert.equal((await r.log()).filter((x) => x.kind === 'escalation').length, 0);
+  assert.equal((await verdictOf(await readState(r.cwd))).verdict, 'Done');
+});
+
+test('a lease the finished commitment left behind is still stale once it closes (issue #38)', async () => {
+  const { done } = await import('../lib/commitment.mjs');
+  const r = await loopRepo();
+  await r.passReq('DEMO-001'); await r.review(); await r.report();
+  await begin(r.cwd, { action: 'run', target: 'DEMO-001', env: {} });
+  await done(r.cwd, 'first');
+  const v = await verdictOf(await readState(r.cwd));
+  assert.equal(`${v.action} ${v.target}`, 'reconcile run DEMO-001');
+  assert.match(v.reason, /the commitment is closed/);
+});

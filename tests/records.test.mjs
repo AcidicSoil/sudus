@@ -170,16 +170,16 @@ test('readLog refuses a commit on the log that is not a record', async (t) => {
 });
 test('range is the log after the last start and knows whether it is closed', async (t) => {
   const repo = await makeRepo(); t.after(repo.remove);
-  assert.deepEqual(range([]), { start: null, records: [], closed: false });
+  assert.deepEqual(range([]), { start: null, records: [], closed: false, closer: null });
   await appendRecord(repo.dir, 'start', 'a', { ...START, slug: 'a' });
   await appendRecord(repo.dir, 'done', 'a', { slug: 'a', snapshot: WS });
   const s2 = await appendRecord(repo.dir, 'start', 'b', { ...START, slug: 'b' });
   const item = await appendRecord(repo.dir, 'item', 'b', { kind: 'backlog', slug: 'b', source: 'LOOP-001', body: 'idea' });
   let r = range(await readLog(repo.dir));
-  assert.deepEqual([r.start.sha, r.records.map((x) => x.sha), r.closed], [s2, [item], false]);
-  await appendRecord(repo.dir, 'done', 'b', { slug: 'b', snapshot: WS });
+  assert.deepEqual([r.start.sha, r.records.map((x) => x.sha), r.closed, r.closer], [s2, [item], false, null]);
+  const d2 = await appendRecord(repo.dir, 'done', 'b', { slug: 'b', snapshot: WS });
   r = range(await readLog(repo.dir));
-  assert.equal(r.closed, true);
+  assert.deepEqual([r.closed, r.closer.sha], [true, d2]);
 });
 
 const SHA = '1'.repeat(40);
