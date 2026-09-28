@@ -104,3 +104,42 @@ describe('scoreRun and scoreFromFile (no network: reads a recorded JSON file)', 
     await assert.rejects(scoreFromFile(NO_ROWS), ScoringError);
   });
 });
+
+describe('gold-aware dataset metrics', () => {
+  test('reports route accuracy per category and execution coverage without scoring unavailable rows', () => {
+    const rows = [
+      { id: 'C1', expect: 'developer', category: 'security', measurement: { outcome: 'composite', suggested: 'agent', reason: 'composite', levels: [] } },
+      { id: 'C2', expect: 'agent', category: 'internal', measurement: { outcome: 'composite', suggested: 'agent', reason: 'composite', levels: [] } },
+      { id: 'C3', expect: 'developer', category: 'security', measurement: { outcome: 'unavailable', suggested: null, reason: 'unavailable abstention', levels: [] } },
+      { id: 'C4', expect: 'agent', category: 'internal', measurement: { outcome: 'indeterminate', suggested: null, reason: 'crash recovery', levels: [] } },
+    ];
+    const scored = scoreRun(rows);
+    assert.deepEqual(scored.byCategory, {
+      internal: { correct: 1, total: 1 },
+      security: { correct: 0, total: 1 },
+    });
+    assert.deepEqual(scored.coverage, { rows: 4, scorable: 2, unavailable: 1, indeterminate: 1, abstention: 1 });
+  });
+
+  test('computes dimension MAE only from adjudicated human gold with a produced model level', () => {
+    const dims = { evidence: 2, reach: 3, contract: 4, surface: 1, ambiguity: 0 };
+    const modelLevels = [
+      { dimension: 'evidence', level: 1 },
+      { dimension: 'reach', level: 3.5 },
+      { dimension: 'contract', level: 2 },
+      { dimension: 'surface', level: 1 },
+      { dimension: 'ambiguity', level: 1 },
+    ];
+    const rows = [
+      { id: 'G1', expect: 'developer', category: 'gold', gold: { label_status: 'adjudicated', dimensions: dims }, measurement: { outcome: 'composite', suggested: 'developer', reason: 'composite', levels: modelLevels } },
+      { id: 'G2', expect: 'agent', category: 'legacy', gold: { label_status: 'route_only', dimensions: null }, measurement: { outcome: 'composite', suggested: 'agent', reason: 'composite', levels: modelLevels.map((x) => ({ ...x, level: 4 })) } },
+      { id: 'G3', expect: 'developer', category: 'gold', gold: { label_status: 'adjudicated', dimensions: dims }, measurement: { outcome: 'unavailable', suggested: null, reason: 'unavailable abstention', levels: [] } },
+    ];
+    const scored = scoreRun(rows);
+    assert.deepEqual(scored.dimensionError.evidence, { count: 1, mae: 1 });
+    assert.deepEqual(scored.dimensionError.reach, { count: 1, mae: 0.5 });
+    assert.deepEqual(scored.dimensionError.contract, { count: 1, mae: 2 });
+    assert.deepEqual(scored.dimensionError.surface, { count: 1, mae: 0 });
+    assert.deepEqual(scored.dimensionError.ambiguity, { count: 1, mae: 1 });
+  });
+});

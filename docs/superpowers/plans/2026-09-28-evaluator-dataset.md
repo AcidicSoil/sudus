@@ -89,12 +89,12 @@
 - `scoreRun(rows)` additionally returns `byCategory`, `coverage`, and `dimensionError`.
 - `dimensionError[dimension]` is `{count, mae}` and only uses rows with numeric adjudicated gold for that dimension and a produced model level.
 
-- [ ] **Step 1: Add failing scorer tests** for per-category route counts, unavailable/indeterminate coverage, and exact hand-computed dimension MAE while proving route-only cases do not enter dimension error.
-- [ ] **Step 2: Run `node --test tests/bench/scoring.test.mjs`** and verify the new metrics are absent.
-- [ ] **Step 3: Implement the minimum pure scoring additions** without redefining provider confidence as correctness probability.
-- [ ] **Step 4: Re-run the scorer tests** and expect pass.
-- [ ] **Step 5: Run `node --test tests/evaluator-dataset.test.mjs tests/bench/*.test.mjs`** and `git diff --check`.
-- [ ] **Step 6: Commit the passing deliverable** as `feat: score evaluator gold by category and dimension`.
+- [x] **Step 1: Add failing scorer tests** for per-category route counts, unavailable/indeterminate coverage, and exact hand-computed dimension MAE while proving route-only cases do not enter dimension error.
+- [x] **Step 2: Run `node --test tests/bench/scoring.test.mjs`** and verify the new metrics are absent.
+- [x] **Step 3: Implement the minimum pure scoring additions** without redefining provider confidence as correctness probability.
+- [x] **Step 4: Re-run the scorer tests** and expect pass.
+- [x] **Step 5: Run `node --test tests/evaluator-dataset.test.mjs tests/bench/*.test.mjs`** and `git diff --check`.
+- [x] **Step 6: Commit the passing deliverable** as `feat: score evaluator gold by category and dimension`.
 
 ### Task 5: Final verification and research handoff
 

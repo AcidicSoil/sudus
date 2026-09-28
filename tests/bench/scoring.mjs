@@ -44,7 +44,7 @@ export function scoreRun(rows) {
   const pairs = [], unavailable = [];
   for (const r of rows) {
     const predicted = predictedRoute(r.measurement);
-    const item = { id: r.id, expect: r.expect, predicted, deciding: r.measurement.outcome };
+    const item = { id: r.id, expect: r.expect, predicted, deciding: r.measurement.outcome, category: r.category };
     if (predicted === null) unavailable.push(item);
     else pairs.push(item);
   }
@@ -56,6 +56,16 @@ export function scoreRun(rows) {
   for (const p of pairs) confusion[p.expect][p.predicted]++;
 
   const misrouted = pairs.filter((p) => p.predicted !== p.expect);
+
+  const categories = [...new Set(rows.map((r) => r.category).filter((x) => x !== undefined))].sort();
+  const byCategory = Object.fromEntries(categories.map((category) => [category, accuracyOf(pairs.filter((p) => p.category === category))]));
+  const coverage = {
+    rows: rows.length,
+    scorable: pairs.length,
+    unavailable: rows.filter((r) => r.measurement.outcome === 'unavailable').length,
+    indeterminate: rows.filter((r) => r.measurement.outcome === 'indeterminate').length,
+    abstention: rows.filter((r) => r.measurement.outcome === 'unavailable' && /\babstention\b/.test(r.measurement.reason ?? '')).length,
+  };
 
   // Mean level per dimension, split by expected class, over rows that actually carry levels
   // (a floor/unavailable/indeterminate outcome has an empty levels list and is excluded from the
@@ -74,7 +84,17 @@ export function scoreRun(rows) {
     return [d, { agentMean, developerMean, separation }];
   }));
 
-  return { overall, byExpect, confusion, misrouted, unavailable, dimensionSeparation };
+  const dimensionError = Object.fromEntries(DIMENSIONS.map((dimension) => {
+    const errors = [];
+    for (const row of rows) {
+      if (row.gold?.label_status !== 'adjudicated' || typeof row.gold?.dimensions?.[dimension] !== 'number') continue;
+      const level = row.measurement.levels.find((item) => item.dimension === dimension)?.level;
+      if (typeof level === 'number' && Number.isFinite(level)) errors.push(Math.abs(level - row.gold.dimensions[dimension]));
+    }
+    return [dimension, { count: errors.length, mae: errors.length ? errors.reduce((sum, value) => sum + value, 0) / errors.length : null }];
+  }));
+
+  return { overall, byExpect, byCategory, confusion, misrouted, unavailable, coverage, dimensionSeparation, dimensionError };
 }
 
 // resultsPath -> {meta, rows, scored}: reads a recorded results JSON file ({meta, rows}, the
@@ -133,6 +153,22 @@ export function renderResultsMd({ meta, scored }) {
     '| id | expect | outcome |',
     '|---|---|---|',
     ...scored.unavailable.map((m) => `| ${m.id} | ${m.expect} | ${m.deciding} |`),
+    '',
+    '## Coverage',
+    '',
+    `Rows: ${scored.coverage.rows}; scorable: ${scored.coverage.scorable}; unavailable: ${scored.coverage.unavailable}; indeterminate: ${scored.coverage.indeterminate}; abstention: ${scored.coverage.abstention}`,
+    '',
+    '## Route accuracy by category',
+    '',
+    '| category | accuracy |',
+    '|---|---|',
+    ...Object.entries(scored.byCategory).map(([category, value]) => `| ${category} | ${pct(value.correct, value.total)} |`),
+    '',
+    '## Dimension error against adjudicated human gold',
+    '',
+    '| dimension | gold rows | MAE |',
+    '|---|---:|---:|',
+    ...Object.entries(scored.dimensionError).map(([dimension, value]) => `| ${dimension} | ${value.count} | ${num(value.mae)} |`),
     '',
     '## Per-dimension separation (mean level, agent-expected vs developer-expected)',
     '',

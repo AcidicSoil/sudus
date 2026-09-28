@@ -221,11 +221,18 @@ Semantic accuracy and runtime availability are reported separately.
 For semantic cases report:
 
 - route accuracy and agent/developer confusion matrix;
-- per-category route accuracy;
+- per-category route accuracy over scorable predictions only;
 - false-agent and false-developer cases;
 - veto incidence;
-- per-dimension mean absolute error against adjudicated dimension gold;
-- coverage: scorable, unavailable, indeterminate, and abstention counts.
+- per-dimension mean absolute error against adjudicated dimension gold, counting
+  only rows where the model produced that dimension;
+- coverage over all measured rows: scorable predictions, `unavailable`,
+  `indeterminate`, and the subset of unavailable rows whose reason is explicit
+  abstention.
+
+`unavailable` and `indeterminate` rows never become developer predictions. A
+route-only legacy row may contribute to route accuracy but never to dimension
+MAE.
 
 For repeatability, rerun the exact same frozen case and report route consistency
 plus per-dimension score variance. Repeatability never substitutes for oracle
