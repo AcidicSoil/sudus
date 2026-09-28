@@ -94,6 +94,20 @@ describe('evaluator dataset v1 contract', () => {
     assert.deepEqual(data.cases.map((x) => x.id), ['C1', 'C2']);
   });
 
+  test('refuses a v1 manifest that weakens the fixed split, suite, or human-gold policy', () => {
+    const weakHumanGold = manifest();
+    weakHumanGold.rules.human_gold_splits = ['test', 'ood'];
+    assert.throws(() => validateDataset({ manifest: weakHumanGold, cases: [row()] }), /human_gold_splits/i);
+
+    const missingSplit = manifest();
+    missingSplit.splits = ['development', 'calibration', 'test'];
+    assert.throws(() => validateDataset({ manifest: missingSplit, cases: [row()] }), /splits/i);
+
+    const missingSuite = manifest();
+    missingSuite.suites = ['semantic'];
+    assert.throws(() => validateDataset({ manifest: missingSuite, cases: [row()] }), /suites/i);
+  });
+
   test('rejects duplicate ids', () => {
     assert.throws(() => validateDataset({ manifest: manifest(), cases: [row(), row()] }), DatasetError);
   });
@@ -129,6 +143,11 @@ describe('evaluator dataset v1 contract', () => {
       const bad = row({ id: `C-${split}`, family_id: `F-${split}`, split });
       assert.throws(() => validateDataset({ manifest: manifest(), cases: [bad] }), /adjudicated/i);
     }
+  });
+
+  test('allows a semantic case with no named paths, matching the Sudus draft contract', () => {
+    const noPaths = row({ scenario: { category: 'wording', draft: draft({ paths: [] }) } });
+    assert.doesNotThrow(() => validateDataset({ manifest: manifest(), cases: [noPaths] }));
   });
 
   test('runtime-contract rows are not required to invent semantic dimension gold', () => {
@@ -181,6 +200,16 @@ describe('legacy benchmark seed migration CLI', () => {
     assert.equal(second.status, 0, second.stderr);
     assert.deepEqual(readFileSync(join(dir, 'manifest.json')), beforeManifest);
     assert.deepEqual(readFileSync(join(dir, 'cases.jsonl')), beforeCases);
+  });
+
+  test('preflights every destination before writing so a divergent cases file leaves no partial manifest', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'sudus-eval-seed-atomic-refuse-')), 'sudus-routing-v1');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'cases.jsonl'), '{\"curated\":true}\n');
+    const r = runDatasetCli(['seed-legacy', 'tests/bench/scenarios.json', dir]);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /refus.*overwrite|diverg/i);
+    assert.throws(() => readFileSync(join(dir, 'manifest.json')), /ENOENT/);
   });
 
   test('refuses to overwrite divergent dataset files', () => {

@@ -132,6 +132,9 @@ Every JSONL row contains:
 }
 ```
 
+`scenario.draft.paths` follows the Sudus draft contract and may be empty when a
+decision names no specific file. `concerns` and `options` remain non-empty.
+
 ### Tracks
 
 `core` cases are intended for apples-to-apples comparison across Verdict, Jeff,

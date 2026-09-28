@@ -42,12 +42,12 @@ export function renderDataset(data) {
   };
 }
 
-async function writeIfAbsentOrSame(path, expected) {
+async function preflightFile(path, expected) {
   let current = null;
   try { current = await readFile(path, 'utf8'); }
   catch (err) { if (err.code !== 'ENOENT') throw err; }
   if (current !== null && current !== expected) throw new Error(`refusing to overwrite divergent dataset file ${path}`);
-  if (current === null) await writeFile(path, expected);
+  return current === null;
 }
 
 export async function seedLegacy(inputPath, outDir) {
@@ -55,8 +55,12 @@ export async function seedLegacy(inputPath, outDir) {
   const data = legacyDatasetFromScenarios(raw, { name: basename(resolve(outDir)), source: sourceRef(inputPath) });
   const rendered = renderDataset(data);
   await mkdir(outDir, { recursive: true });
-  await writeIfAbsentOrSame(join(outDir, 'manifest.json'), rendered.manifest);
-  await writeIfAbsentOrSame(join(outDir, 'cases.jsonl'), rendered.cases);
+  const manifestPath = join(outDir, 'manifest.json');
+  const casesPath = join(outDir, 'cases.jsonl');
+  const writeManifest = await preflightFile(manifestPath, rendered.manifest);
+  const writeCases = await preflightFile(casesPath, rendered.cases);
+  if (writeManifest) await writeFile(manifestPath, rendered.manifest);
+  if (writeCases) await writeFile(casesPath, rendered.cases);
   return data;
 }
 
