@@ -7,6 +7,11 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.5 - 2026-09-29
+
+- A resolve lease on the open commitment's slug covers the files a fix changes (issue #39). After the report wake names `resolve SLUG N`, and the lease for the fix is `sudus begin resolve SLUG`. A lease covered only the inputs of the mechanisms that declare its target, and no mechanism declares a slug, so every file the fix changed was named `commit`. A lease on the open commitment's slug now covers the inputs of every mechanism the commitment's requirements name, and the manual's lease section says so.
+- The follow-up command at the end of the `sudus measure --brief` launch block runs as printed (issue #40). It put the intent's short sha between the slug and `--file`, and `sudus measure` refuses a second argument there. The line is now `sudus measure <slug> --file <path to its answers>`.
+
 ## 4.2.4 - 2026-09-28
 
 - A lease taken between commitments no longer reads as stale (issue #38). Preparing the next commitment under leases, as the working agreement's `record PATH` move asks, named `reconcile` for every lease because the last commitment was closed, and the fourth begin, commit and end wrote a cycle escalation that neither `instead` option could answer. `sudus begin` now records the done or superseded record that closed the last commitment, and wake treats a lease taken after it as preparation for the next start: only an ended session makes it stale. A lease the finished commitment left behind is still named `reconcile`, and so is a lease 4.2.3 took between commitments, which lacks that record; ending it is enough.
