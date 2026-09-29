@@ -496,6 +496,22 @@ test('a dirty declared input is record without a lease, commit when the lease do
   assert.notEqual((await wake(r.cwd)).action, 'record');
 });
 
+// Issue #39: after the report wake names resolve SLUG N, and the lease for the fix is resolve SLUG.
+// No mechanism declares a slug, so that lease covered nothing and every file the fix changed was
+// named commit.
+test('a resolve lease on the open commitment slug covers the files a fix changes (issue #39)', async () => {
+  const r = await loopRepo({ reqs: ['DEMO-001', 'DEMO-002'] });
+  await begin(r.cwd, { action: 'resolve', target: 'first', touch: [] });
+  await r.write('src/demo.mjs', 'console.log("fixed");\n');
+  await r.write('flags/DEMO-002', 'pass\n');
+  const covered = await wake(r.cwd);
+  assert.notEqual(covered.action, 'commit', covered.reason);
+  await end(r.cwd);
+  await begin(r.cwd, { action: 'resolve', target: 'second', touch: [] });
+  const other = await wake(r.cwd);
+  assert.deepEqual([other.action, other.reason.endsWith('the lease for resolve second does not cover it')], ['commit', true]);
+});
+
 test('declare is named for the first set requirement no definition names', async () => {
   const r = await loopRepo({ reqs: ['DEMO-001', 'DEMO-002'] });
   assert.notEqual((await wake(r.cwd)).action, 'declare');                   // the fixture declares every requirement it starts

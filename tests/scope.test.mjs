@@ -61,6 +61,17 @@ test('a lease covers a path through its target requirement or its touch list', (
   assert.ok(leaseCovers({ action: 'build-decision', target: '01J', touch: ['lib/x.mjs'] }, mechs, 'lib/x.mjs'));
   assert.ok(!leaseCovers({ action: 'build-decision', target: '01J', touch: [] }, mechs, 'lib/x.mjs'));
 });
+// Issue #39: a lease on the open commitment's slug (resolve SLUG, for a finding) covers the inputs
+// of every mechanism the commitment's requirements name, and nothing outside them.
+test('a lease on the open commitment slug covers the inputs of the mechanisms its requirements name (issue #39)', () => {
+  const lease = { action: 'resolve', target: 'first', touch: [] };
+  const open = { slug: 'first', requirements: ['DEMO-001'] };
+  assert.ok(leaseCovers(lease, mechs, 'src/demo.mjs', open));
+  assert.ok(!leaseCovers(lease, mechs, 'lib/x.mjs', open));
+  assert.ok(leaseCovers(lease, mechs, 'lib/x.mjs', { slug: 'first', requirements: ['DEMO-001', 'DEMO-002'] }));
+  assert.ok(!leaseCovers(lease, mechs, 'src/demo.mjs', { slug: 'second', requirements: ['DEMO-001'] }));
+  assert.ok(!leaseCovers(lease, mechs, 'src/demo.mjs'));
+});
 
 test('the declaration-set digest changes when a definition digest changes', () => {
   const a = declarationSetDigest(mechs);

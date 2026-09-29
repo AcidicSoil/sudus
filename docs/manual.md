@@ -443,8 +443,10 @@ src/new-file.mjs` also declares a new file as an input for the life of the
 lease, so writing to it is not an undeclared change. The target must be a
 requirement that exactly one mechanism declares, because `sudus end`
 writes the touch into that mechanism; a touch on a `resolve` or `fix`
-lease is refused, since nothing would write it. After committing the
-work:
+lease is refused, since nothing would write it. The fix for a finding
+takes `sudus begin resolve <slug>`: a lease on the open commitment's
+slug covers the inputs of every mechanism its requirements name. After
+committing the work:
 
 ```sh
 sudus end --lease <the-sha-begin-printed>
