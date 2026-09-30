@@ -7,6 +7,13 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.8 - 2026-09-30
+
+- The TypeSafe response body is read against a 1 MiB budget (issue #56). A `Content-Length` over it is refused before any byte is read, and the body is cancelled; a stream is cancelled once its count passes the budget. An oversized response is the `toolarge` failure, which a measurement records as unavailable.
+- The result scanner added in 4.2.7 records results only for the requirements being checked, so a command printing lines for other ids cannot grow memory past the output cap, and identity probes record none (found in a review of 4.2.7).
+- Tests hold the shared Git rules together: one set of awkward names (tab, newline, quote, non-ASCII, file and directory prefixes, an executable, a symlink) reads alike through the tree builders, `listTree`, `workspaceDelta` and touch comparison. The check lock and the transaction lock refuse a lock that keeps vanishing the same way, naming a symlink when there is one (issue #58).
+- The README and manual keep three guarantees apart: an attested record is the agent's quote of your words, a signature shows only that whoever holds the private key signed, and the adversary's read-only role is an instruction that no supported harness enforces (issue #60).
+
 ## 4.2.7 - 2026-09-30
 
 - A check whose declared inputs, requirement text or mechanism definition change while its command runs records every result as unverified, and says why (issue #44). The command runs in the live workspace, so an edit made during the run was tested while the receipt held the bytes from before it, and once the edit was reverted the pass stood current for bytes the command never saw. An edit made and reverted within the run is still not seen; running on a fixed copy of the inputs would close that, and is a larger change.
