@@ -380,3 +380,28 @@ test('a declared connection URL or probe output records no password in the recei
     await p.cleanup();
   }
 });
+
+// Issue #45: result lines were parsed only from the output kept under the 8 MiB diagnostic cap, so
+// a fail printed after the cap was never read and an earlier pass stood as the result.
+test('a fail printed after the output cap overrides an earlier pass (issue #45)', async () => {
+  const { OUTPUT_CAP, isCurrent } = await import('../lib/check.mjs');
+  const p = await declared();
+  try {
+    await p.write('check.mjs', `console.log('sudus: DEMO-001: pass');\nawait new Promise((resolve, reject) => process.stdout.write('x'.repeat(${OUTPUT_CAP + 65536}) + '\\n', (e) => (e ? reject(e) : resolve())));\nconsole.log('sudus: DEMO-001: fail');\nprocess.exitCode = 1;\n`);
+    await check(p.cwd, 'DEMO-001');
+    const r = (await readLog(p.cwd)).filter((x) => x.kind === 'receipt').at(-1);
+    assert.equal(r.payload.results[0].result, 'fail');
+    assert.match(await readFile(join(p.cwd, '.sudus/output', r.payload.output.slice(7)), 'utf8'), /output truncated/);
+    assert.equal(await isCurrent(p.cwd, r, 'DEMO-001'), true);
+  } finally { await p.cleanup(); }
+});
+
+test('a result line split across writes and ended with CRLF is read (issue #45)', async () => {
+  const p = await declared();
+  try {
+    await p.write('check.mjs', `process.stdout.write('noise\\nsudus: DEMO-');\nawait new Promise((r) => setTimeout(r, 50));\nprocess.stdout.write('001: pa');\nawait new Promise((r) => setTimeout(r, 50));\nprocess.stdout.write('ss\\r\\n');\n`);
+    await check(p.cwd, 'DEMO-001');
+    const r = (await readLog(p.cwd)).filter((x) => x.kind === 'receipt').at(-1);
+    assert.equal(r.payload.results[0].result, 'pass');
+  } finally { await p.cleanup(); }
+});
