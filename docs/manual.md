@@ -1049,18 +1049,6 @@ names the exact fetch or push that repairs a gap; it never guesses. A
 clone missing the durable refs is told the exact `git fetch` to run, or,
 with no remote configured, to run `sudus init`.
 
-### The log cache
-
-A command that writes state also saves a cache of the decoded log in the
-Git directory, `.git/sudus/log-cache.json`, with the tree of each
-receipt's input snapshot. Wake reads the cache and takes from Git only the
-records added since, so a long log does not slow every prompt. Wake never
-writes the cache. It never travels with the code and is never committed.
-Sudus ignores a cache that does not match the log or its own version.
-Deleting it is always safe: the next command that writes state saves a new
-one. Like the refs it copies, it is not a security boundary; editing it
-changes what Sudus reads.
-
 ### Capturing on a second clone
 
 The log is one chain that is never merged, so only the clone doing the
