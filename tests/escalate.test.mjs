@@ -735,3 +735,22 @@ test('a draft that repeats a concern token is refused', () => {
   assert.throws(() => validateDraft(draft({ concerns: ['DEMO-001', `finding:${a}#1`, 'DEMO-001'] })), { message: 'sudus: concern token DEMO-001 is repeated' });
   assert.equal(validateDraft(draft({ concerns: [`finding:${a}#1`, `finding:${a}#2`] })).concerns.length, 2, 'two findings of one record are two tokens');
 });
+
+// Wake calls waitedBy for every backlog item between commitments. It found the ok again for each
+// record before it, a scan of the log each time, so its work grew with the square of the log. The
+// work is counted as reads of each record's kind, which the scans read first.
+test('waitedBy reads the log a bounded number of times, however far the ok sits from the escalation', async () => {
+  const { waitedBy } = await import('../lib/escalate.mjs');
+  let reads = 0;
+  const hex = (n) => n.toString(16).padStart(40, '0');
+  const rec = (sha, kind, payload) => ({ sha, get kind() { reads++; return kind; }, target: '-', payload });
+  const item = rec(hex(1), 'item', { kind: 'backlog', slug: 'later', source: 'DEMO-001', body: 'an idea' });
+  const esc = rec(hex(2), 'escalation', { slug: 'first', concerns: `wait:${hex(1)}` });
+  const filler = Array.from({ length: 500 }, (_, i) => rec(hex(1000 + i), 'receipt', {}));
+  const log = [item, esc, ...filler, rec(hex(3), 'answer', { escalation: hex(2), kind: 'ok' })];
+  reads = 0;
+  assert.equal(waitedBy(log, hex(1)), hex(2));
+  assert.ok(reads < 10 * log.length, `${reads} reads of ${log.length} records`);
+  log.push(rec(hex(4), 'done', { slug: 'first' }));
+  assert.equal(waitedBy(log, hex(1)), null);
+});
