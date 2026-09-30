@@ -357,3 +357,26 @@ test('finding 11: an existing .sudus/output/.gitignore is not rewritten by check
   await check(repo.cwd, 'DEMO-001');
   assert.equal(await readFile(join(repo.cwd, OUTPUT_DIR, '.gitignore'), 'utf8'), 'custom\n');
 });
+
+// Issue #46: spec item 37 says execution identity holds only non-secret values, but the name
+// screening passes a connection URL such as DATABASE_URL, and its value went into the receipt, a
+// commit on the log that travels to the authority remote, with the password in it.
+test('a declared connection URL or probe output records no password in the receipt, and the receipt stays current (issue #46)', async () => {
+  const { isCurrent } = await import('../lib/check.mjs');
+  const url = 'postgres://review:synthetic-password@example.invalid/db?sslmode=require&password=synthetic-other';
+  const prior = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = url;
+  const p = await declared({ identity: { tools: { probe: 'echo mysql://root:synthetic-probe@db.invalid/app' }, env: ['DATABASE_URL'], image: null } });
+  try {
+    await check(p.cwd, 'DEMO-001');
+    const r = (await readLog(p.cwd)).filter((x) => x.kind === 'receipt').at(-1);
+    assert.equal(r.payload.identity.env.DATABASE_URL, 'postgres://review:[redacted]@example.invalid/db?sslmode=require&password=[redacted]');
+    assert.equal(r.payload.identity.tools.probe, 'mysql://root:[redacted]@db.invalid/app');
+    const body = (await catCommit(p.cwd, r.sha)).body;
+    for (const secret of ['synthetic-password', 'synthetic-other', 'synthetic-probe']) assert.ok(!body.includes(secret), secret);
+    assert.equal(await isCurrent(p.cwd, r, 'DEMO-001'), true);
+  } finally {
+    if (prior === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prior;
+    await p.cleanup();
+  }
+});
