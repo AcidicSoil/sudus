@@ -271,6 +271,21 @@ test('covers: a lease covers its target inputs and its touch list', async () => 
 import { withCheckLock } from '../lib/lease.mjs';
 import { readFileSync } from 'node:fs';
 
+// Issue #48: a dangling symlink at the lock path gives EEXIST to the exclusive create and ENOENT to
+// the read, and `attempt--` retried that without end in a synchronous loop. Run in a child with a
+// timeout, so a loop brought back cannot hang the suite.
+test('a dangling symlink at the check lock is a bounded refusal naming it, not an endless retry (issue #48)', async () => {
+  const { execFile } = await import('node:child_process');
+  const { pathToFileURL } = await import('node:url');
+  const cwd = await initialized();
+  await symlink('missing-target', await gitPath(cwd, 'sudus-check.lock'));
+  const script = `import { withCheckLock } from ${JSON.stringify(pathToFileURL(join(process.cwd(), 'lib/lease.mjs')).href)};
+try { await withCheckLock(${JSON.stringify(cwd)}, async () => console.log('acquired')); } catch (e) { console.log(e.message); }`;
+  const r = await new Promise((resolve) => execFile(process.execPath, ['--input-type=module', '-e', script], { timeout: 10000, killSignal: 'SIGKILL' }, (error, stdout) => resolve({ error, stdout })));
+  assert.equal(r.error?.killed ?? false, false, 'withCheckLock did not return within 10 s');
+  assert.match(r.stdout, /sudus-check\.lock is a symlink; remove it by hand, then retry/);
+});
+
 test('the check lock is held only for the run and nests inside an action lease', async () => {
   const cwd = await initialized();
   await begin(cwd, { action: 'implement', target: 'CORE-001', env: {} });
