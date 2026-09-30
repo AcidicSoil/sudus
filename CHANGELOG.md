@@ -7,6 +7,20 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.7 - 2026-09-30
+
+- A check whose declared inputs, requirement text or mechanism definition change while its command runs records every result as unverified, and says why (issue #44). The command runs in the live workspace, so an edit made during the run was tested while the receipt held the bytes from before it, and once the edit was reverted the pass stood current for bytes the command never saw. An edit made and reverted within the run is still not seen; running on a fixed copy of the inputs would close that, and is a larger change.
+- A `fail` printed after the 8 MiB output cap still overrides an earlier `pass` (issue #45). Result lines are now read as the output streams, not from the capped copy kept for diagnosis.
+- Execution identities record no password from a connection URL or a probe's output (issue #46). The password in a URL's userinfo and the value of a password- or token-named query parameter are recorded as `[redacted]`, and the spec's identity paragraph says so.
+- The calibration bound holds for large samples (issue #47). The binomial terms are summed in the log domain; 2000 errors in 20000 had given a bound of 0.037 instead of 0.104.
+- A dangling symlink at `sudus-check.lock` is a bounded refusal naming it, not an endless retry (issue #48).
+- The read-only tree identity sorts entries by bytes, as Git does, so an unchanged input with names such as a private-use character and an emoji no longer looks stale (issue #49).
+- `listTree` keeps a path that holds a tab whole (issue #50), and the lease's touch comparison reads `ls-tree -z` too.
+- Scope comparison no longer fails on a path that holds a newline (issue #51). Snapshot, scope and lease hashing share one rule for which paths can be batched.
+- A brief runs a shared mechanism's input hashing and tool probes once, not once per requirement (issue #52).
+- The session-start, turn and stop hooks run Sudus when its path holds a space (issue #53).
+- A `.gitattributes` clean filter no longer makes an untouched `--touch` file read as changed (issue #54); touch hashing uses raw bytes, as snapshots do.
+
 ## 4.2.6 - 2026-09-29
 
 - In a repository never initialized for Sudus, wake names the skills that continue (issue #41). With no settings file it exited 3 naming a bare `sudus init`, which refuses without `--remote` or `--local-only`, a choice the new-project and existing-project skills ask the developer to make. It now prints `sudus: not initialized; run /new-project or /existing-project`. The session-start hook's missing line separates its items with commas.
