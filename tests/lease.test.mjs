@@ -271,6 +271,21 @@ test('covers: a lease covers its target inputs and its touch list', async () => 
 import { withCheckLock } from '../lib/lease.mjs';
 import { readFileSync } from 'node:fs';
 
+// Issue #58: the touch comparison parses ls-tree -z and hashes one by one the paths --stdin-paths
+// cannot take, as snapshots do, so an untouched file with a tab or a newline in its name is
+// unchanged.
+test('untouched files named with a tab or a newline are unchanged touches (issue #58)', async () => {
+  const cwd = await initialized();
+  const names = ['src/tab\tname.mjs', 'src/new\nline.mjs'];
+  for (const n of names) writeFileSync(join(cwd, n), 'export const x = 1;\n');
+  await git(['add', '-A'], { cwd }); await git(['commit', '-q', '-m', 'awkward names'], { cwd });
+  await begin(cwd, { action: 'implement', target: 'CORE-001', touch: names, env: {} });
+  assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: [], unchanged: names });
+  writeFileSync(join(cwd, names[1]), 'export const x = 2;\n');
+  assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: [names[1]], unchanged: [names[0]] });
+  await end(cwd);
+});
+
 // Issue #48: a dangling symlink at the lock path gives EEXIST to the exclusive create and ENOENT to
 // the read, and `attempt--` retried that without end in a synchronous loop. Run in a child with a
 // timeout, so a loop brought back cannot hang the suite.
