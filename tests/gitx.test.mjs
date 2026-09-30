@@ -169,7 +169,7 @@ test('listTree keeps a path whole when it holds a tab, a newline or a leading qu
 // supplementary-plane one, so the read-only identity disagreed with git write-tree for good.
 test('treeIdentityReadOnly matches git write-tree for names whose UTF-16 and byte orders differ (issue #49)', async (t) => {
   const repo = await makeRepo(); t.after(repo.remove);
-  const paths = ['.txt', '\u{1f600}.txt', 'd/a.txt', 'd\u{1f600}/b.txt', 'café', 'café.txt', 'é.txt', 'Z.txt', 'a.txt'];
+  const paths = ['\ue000.txt', '\u{1f600}.txt', 'd\ue000/a.txt', 'd\u{1f600}/b.txt', 'caf\u00e9', 'caf\u00e9.txt', 'e\u0301.txt', 'Z.txt', 'a.txt'];
   for (const p of paths) await repo.write(p, 'content\n');
   assert.equal(await treeIdentityReadOnly(repo.dir, { paths, exclude: [] }), await writeTreeFromPaths(repo.dir, { paths }));
 });
