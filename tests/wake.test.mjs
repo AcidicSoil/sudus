@@ -496,6 +496,19 @@ test('a dirty declared input is record without a lease, commit when the lease do
   assert.notEqual((await wake(r.cwd)).action, 'record');
 });
 
+// Issue #42: the stale-lease check read a requirement target with /^[A-Z]+-\d+$/, so a prefix with a
+// digit (E2E, S3, OAUTH2), which the requirement grammar allows, was never named stale outside the
+// commitment, and the lease kept its target's inputs out of record and commit.
+test('a lease on a requirement outside the commitment is stale when its prefix holds a digit (issue #42)', async () => {
+  const r = await loopRepo();
+  for (const target of ['E2E-002', 'API-002']) {
+    await begin(r.cwd, { action: 'implement', target, touch: [] });
+    const v = await wake(r.cwd);
+    assert.deepEqual([v.action, v.target, v.reason], ['reconcile', `implement ${target}`, `the action lease is stale: ${target} is not in the commitment`]);
+    await end(r.cwd, { abandon: true });
+  }
+});
+
 // Issue #39: after the report wake names resolve SLUG N, and the lease for the fix is resolve SLUG.
 // No mechanism declares a slug, so that lease covered nothing and every file the fix changed was
 // named commit.
