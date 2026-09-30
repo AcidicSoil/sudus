@@ -7,6 +7,12 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.6 - 2026-09-29
+
+- In a repository never initialized for Sudus, wake names the skills that continue (issue #41). With no settings file it exited 3 naming a bare `sudus init`, which refuses without `--remote` or `--local-only`, a choice the new-project and existing-project skills ask the developer to make. It now prints `sudus: not initialized; run /new-project or /existing-project`. The session-start hook's missing line separates its items with commas.
+- A lease on a requirement outside the open commitment is named stale when the requirement's prefix holds a digit, such as `E2E-001` (issue #42). The stale-lease check matched only letters before the dash, so such a lease was never named `reconcile`, and while it was held its target's inputs were exempt from `record` and `commit`. The check now uses the requirement grammar's own identifier pattern.
+- The work-loop diagram, `docs/diagrams/work-loop.dot` and its SVG, lists the `supersede` and `fold` actions in precedence order (issue #43). A test compares the diagram's action rows with wake's order.
+
 ## 4.2.5 - 2026-09-29
 
 - A resolve lease on the open commitment's slug covers the files a fix changes (issue #39). After the report wake names `resolve SLUG N`, and the lease for the fix is `sudus begin resolve SLUG`. A lease covered only the inputs of the mechanisms that declare its target, and no mechanism declares a slug, so every file the fix changed was named `commit`. A lease on the open commitment's slug now covers the inputs of every mechanism the commitment's requirements name, and the manual's lease section says so.
