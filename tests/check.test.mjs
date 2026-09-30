@@ -405,3 +405,36 @@ test('a result line split across writes and ended with CRLF is read (issue #45)'
     assert.equal(r.payload.results[0].result, 'pass');
   } finally { await p.cleanup(); }
 });
+
+// Issue #44: check snapshots the inputs, then runs the command in the live workspace. An edit made
+// while the command ran was tested, the snapshot recorded the bytes before it, and once the edit
+// was reverted the pass stood current for bytes the command never saw.
+test('an input changed while the command runs leaves every result unverified, never a pass for untested bytes (issue #44)', async () => {
+  const { isCurrent, CHANGED_DURING_RUN } = await import('../lib/check.mjs');
+  const { access: exists } = await import('node:fs/promises');
+  const p = await declared();
+  try {
+    await p.write('hello.txt', 'broken\n');
+    await p.write('check.mjs', `import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+writeFileSync('.sudus/output/check-started', '1');
+for (let i = 0; i < 500 && !existsSync('.sudus/output/check-go'); i++) await new Promise((r) => setTimeout(r, 10));
+const ok = readFileSync('hello.txt', 'utf8').trim() === 'hello';
+console.log('sudus: DEMO-001: ' + (ok ? 'pass' : 'fail'));
+console.log('sudus: DEMO-002: pass');
+`);
+    await p.write('.sudus/output/fixture-marker', '');   // the checker writes its barrier file there
+    const pending = check(p.cwd, 'DEMO-001');
+    let started = false;
+    for (let i = 0; i < 400 && !started; i++) { try { await exists(join(p.cwd, '.sudus/output/check-started')); started = true; } catch { await new Promise((r) => setTimeout(r, 10)); } }
+    assert.ok(started, 'the checker reached its barrier');
+    await p.write('hello.txt', 'hello\n');
+    await p.write('.sudus/output/check-go', '1');
+    await pending;
+    const r = (await readLog(p.cwd)).filter((x) => x.kind === 'receipt').at(-1);
+    assert.deepEqual(r.payload.results.map((x) => [x.requirement, x.result]), [['DEMO-001', 'unverified']]);   // DEMO-002 is not Agreed in the fixture
+    assert.ok((await readFile(join(p.cwd, '.sudus/output', r.payload.output.slice(7)), 'utf8')).includes(CHANGED_DURING_RUN));
+    await p.write('hello.txt', 'broken\n');
+    assert.equal(await isCurrent(p.cwd, r, 'DEMO-001'), true, 'the snapshot still matches the reverted bytes');
+    assert.notEqual(r.payload.results[0].result, 'pass');
+  } finally { await p.cleanup(); }
+});
