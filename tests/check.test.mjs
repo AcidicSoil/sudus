@@ -438,3 +438,15 @@ console.log('sudus: DEMO-002: pass');
     assert.notEqual(r.payload.results[0].result, 'pass');
   } finally { await p.cleanup(); }
 });
+
+// Review of 4.2.7 (Codex): the stream scanner kept every requirement id it saw, so a command that
+// printed result lines for many undeclared ids grew memory past the output cap, and identity probes
+// scanned output they never use. Only the declared ids are recorded, and probes record none.
+test('runCommand records results only for the ids it is asked about, and none by default (issue #45 follow-up)', async () => {
+  const { runCommand } = await import('../lib/check.mjs');
+  const cmd = `node -e "for (let i = 0; i < 2000; i++) console.log('sudus: X-' + String(i).padStart(4, '0') + ': pass'); console.log('sudus: DEMO-001: fail')"`;
+  const asked = await runCommand(process.cwd(), cmd, { results: ['DEMO-001', 'DEMO-002'] });
+  assert.deepEqual([...asked.seen.keys()], ['DEMO-001']);
+  assert.deepEqual(asked.seen.get('DEMO-001'), { pass: false, fail: true });
+  assert.equal((await runCommand(process.cwd(), cmd)).seen.size, 0);
+});

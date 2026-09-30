@@ -61,7 +61,11 @@ function isRetryableStatus(status) {
 // test double) is read whole and then measured.
 async function readBounded(res) {
   const declared = Number(retryAfterHeader(res, 'content-length'));
-  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) return null;
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
+    // Review of 4.2.7: cancelled, so the refused exchange does not hold its connection open.
+    await res.body?.cancel?.().catch(() => {});
+    return null;
+  }
   if (!res.body || typeof res.body.getReader !== 'function') {
     const text = await res.text();
     return Buffer.byteLength(text) > MAX_RESPONSE_BYTES ? null : text;

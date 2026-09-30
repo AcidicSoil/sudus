@@ -270,6 +270,7 @@ test('a Content-Length over the budget is refused before the body is read (issue
   await assert.rejects(post(req, { key: 'k', fetchImpl: streamed(200, ['{}'], { 'content-length': String(MAX_RESPONSE_BYTES + 1) }, track) }), (e) => e.klass === 'toolarge');
   assert.equal(track.read, undefined);
   assert.equal(track.textCalled, undefined);
+  assert.equal(track.cancelled, true, 'review of 4.2.7: the refused body is cancelled, not left open');
 });
 test('a small streamed response with a character split across chunks parses whole (issue #56)', async () => {
   const body = Buffer.from('{"model":"jev-1.13.0","answers":{"q":"caf\u00e9"},"usage":{}}');
