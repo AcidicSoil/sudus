@@ -142,6 +142,9 @@ async function looseObjectCount(gitDir) {
 // reproduction ("one wake call after a pass receipt and one edit added three loose objects").
 test('wake writes nothing: the Git directory and worktree hash the same before and after', async () => {
   const r = await loopRepo();
+  // An automatic gc the fixture's commits start in the background writes and removes pack files
+  // while the Git directory is hashed (ENOENT on objects/pack/tmp_idx_*, seen 2026-09-29).
+  await git(['config', 'gc.auto', '0'], { cwd: r.cwd });
   await r.passReq('DEMO-001');
   await r.write('src/demo.mjs', 'console.log("hello");\n// dirty\n');   // a declared input, uncommitted
   const gitDir = (await git(['rev-parse', '--absolute-git-dir'], { cwd: r.cwd })).stdout.trim();
