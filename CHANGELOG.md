@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.9 - 2026-09-30
+
+- Wake between commitments finds the ok on a backlog item's wait escalation once (found while evaluating issue #57). It was found again for every record before it, each time a scan of the log, so the promote check and the Done listing grew with the square of the log's length: on a 2,375-record log, three waiting items cost 202 ms per wake, and 3,082 ms at four times the length. They now cost 0 to 2 ms at those sizes.
+
 ## 4.2.8 - 2026-09-30
 
 - The TypeSafe response body is read against a 1 MiB budget (issue #56). A `Content-Length` over it is refused before any byte is read, and the body is cancelled; a stream is cancelled once its count passes the budget. An oversized response is the `toolarge` failure, which a measurement records as unavailable.
