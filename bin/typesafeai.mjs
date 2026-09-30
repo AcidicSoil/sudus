@@ -15,6 +15,10 @@ const JITTER = 0.25;
 const RETRY_AFTER_CAP_MS = 60000;
 const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_BODY_BYTES = 2000;
+// Issue #56: the response body is read against this budget before it is decoded, parsed or kept.
+// A five-dimension answer is a few kilobytes; a body over the budget is the 'toolarge' failure,
+// which a caller records as an unavailable measurement, never a valid one.
+export const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 // A server response can echo the request back, including the bearer key, and can run
 // to any length. This is the one place response text is ever attached to an error
@@ -50,6 +54,29 @@ function classify(status, text) {
 
 function isRetryableStatus(status) {
   return status === 408 || status === 429 || (status >= 500 && status < 600);
+}
+
+// Reads the body with the byte budget: a Content-Length over it is refused before any byte is
+// read, and a stream is cancelled as soon as its count passes it. A response with no stream (a
+// test double) is read whole and then measured.
+async function readBounded(res) {
+  const declared = Number(retryAfterHeader(res, 'content-length'));
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) return null;
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const text = await res.text();
+    return Buffer.byteLength(text) > MAX_RESPONSE_BYTES ? null : text;
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.byteLength;
+    if (n > MAX_RESPONSE_BYTES) { await reader.cancel().catch(() => {}); return null; }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 function retryAfterHeader(res, name) {
@@ -106,7 +133,7 @@ export async function post(request, opts = {}) {
     let res, text;
     try {
       res = await fetchImpl(ENDPOINT, { method: 'POST', headers, body, signal: controller.signal });
-      text = await res.text();
+      text = await readBounded(res);
     } catch (e) {
       if (timedOut) throw new TransportError('timeout');
       if (res === undefined) throw new TransportError('network');
@@ -115,6 +142,7 @@ export async function post(request, opts = {}) {
       clearTimeout(timer);
     }
 
+    if (text === null) throw new TransportError('toolarge', res.status);
     if (res.status !== 200) {
       if (isRetryableStatus(res.status) && attempt < MAX_RETRIES) {
         const delay = retryDelayMs(res, attempt, randomImpl);

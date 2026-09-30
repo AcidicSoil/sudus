@@ -240,3 +240,40 @@ test('a response body that echoes the key is redacted and truncated', async () =
   assert.ok(thrown.body.length < text.length, 'body must actually be truncated, not just redacted');
   assert.ok(Buffer.byteLength(thrown.body, 'utf8') <= 2000, 'body must be capped at 2000 bytes');
 });
+
+// Issue #56: post read the whole response with res.text() before any length check, so a large or
+// endless body was buffered in full. The body is now read against MAX_RESPONSE_BYTES.
+function streamed(status, parts, headerMap = {}, track = {}) {
+  return async () => ({
+    status, headers: headers(headerMap),
+    text: async () => { track.textCalled = true; return Buffer.concat(parts.map((p) => Buffer.from(p))).toString('utf8'); },
+    body: new ReadableStream({
+      pull(c) { const p = parts.shift(); if (p === undefined) c.close(); else { track.read = (track.read ?? 0) + 1; c.enqueue(typeof p === 'string' ? new TextEncoder().encode(p) : p); } },
+      cancel() { track.cancelled = true; },
+    }, { highWaterMark: 0 }),   // no read ahead, so track.read counts the chunks post asked for
+  });
+}
+test('an oversized response body stops at the byte budget and is toolarge, 200 or error alike (issue #56)', async () => {
+  const { MAX_RESPONSE_BYTES } = await import('../bin/typesafeai.mjs');
+  const chunk = 'x'.repeat(64 * 1024);
+  for (const status of [200, 500]) {
+    const track = {};
+    const parts = Array.from({ length: Math.ceil(MAX_RESPONSE_BYTES / chunk.length) + 8 }, () => chunk);
+    await assert.rejects(post(req, { key: 'k', fetchImpl: streamed(status, parts, {}, track), sleepImpl: async () => {}, randomImpl: () => 0.5 }), (e) => e instanceof TransportError && e.klass === 'toolarge');
+    assert.equal(track.cancelled, true, String(status));
+    assert.ok(track.read <= Math.ceil(MAX_RESPONSE_BYTES / chunk.length) + 1, String(track.read));
+  }
+});
+test('a Content-Length over the budget is refused before the body is read (issue #56)', async () => {
+  const { MAX_RESPONSE_BYTES } = await import('../bin/typesafeai.mjs');
+  const track = {};
+  await assert.rejects(post(req, { key: 'k', fetchImpl: streamed(200, ['{}'], { 'content-length': String(MAX_RESPONSE_BYTES + 1) }, track) }), (e) => e.klass === 'toolarge');
+  assert.equal(track.read, undefined);
+  assert.equal(track.textCalled, undefined);
+});
+test('a small streamed response with a character split across chunks parses whole (issue #56)', async () => {
+  const body = Buffer.from('{"model":"jev-1.13.0","answers":{"q":"caf\u00e9"},"usage":{}}');
+  const at = body.indexOf(0xc3) + 1;
+  const r = await post(req, { key: 'k', fetchImpl: streamed(200, [body.subarray(0, at), body.subarray(at)]) });
+  assert.equal(JSON.parse(r.body).answers.q, 'caf\u00e9');
+});
