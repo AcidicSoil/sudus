@@ -532,6 +532,12 @@ that edit or sign anything after it. Replacing or removing your key takes a
 signature from it, so keep the private key: Sudus has no way to remove a
 key you can no longer sign with.
 
+Neither mode is a security boundary. An attested record is the agent's
+quote of your words. A signature shows only that whoever holds the private
+key signed those exact bytes, so it shows the decision was yours only while
+the agent cannot read that key. What Sudus relies on is that you gave the
+answer yourself, in the conversation.
+
 ## Decisions that did not stop the work
 
 Sudus has two levels of decision, both left to the agent's judgment about
@@ -757,8 +763,10 @@ This writes a brief record and the brief file, and prints the file's path
 and the instruction for starting the adversary: one fresh subagent in the
 same harness, with none of the builder's conversation, the brief file as
 its entire prompt, and the model settings name (`any` when they name none).
-The adversary works in the project itself and reads only. It builds
-nothing, runs no tests and no project code, and starts no subagents. The
+The brief tells the adversary to work in the project itself and read only:
+to build nothing, run no tests and no project code, and start no subagents.
+Sudus cannot enforce this. The harness runs the subagent with its ordinary
+permissions, so the read-only role is an instruction, not isolation. The
 brief lists the receipts, so it knows what already ran. It reads the whole
 specification first and judges the commitment as part of the whole system.
 
