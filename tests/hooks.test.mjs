@@ -233,3 +233,20 @@ for (const name of ["session-start.sh", "turn.sh", "stop.sh"]) {
     assert.equal(second, first); assert.ok(first.includes("Resolvable: implement REQ-001"));
   });
 }
+
+// Issue #53: each hook kept its command as one string, `node <plugin path>/bin/sudus.mjs`, and ran
+// it unquoted, so a plugin path holding a space split into several words and node could not find
+// the module. The fallback runs when the sudus found is older than the plugin.
+test("each hook runs the plugin's own copy when its path holds a space (issue #53)", () => {
+  const { dir } = throwawayRepo();
+  const spaced = join(dir, "plugin copy");
+  symlinkSync(ROOT, spaced);
+  const bin = join(dir, "fakebin");
+  fakeSudus(bin, { stdout: "STALE VERDICT", version: "0.0.1" });
+  for (const hook of ["session-start.sh", "turn.sh", "stop.sh"]) {
+    const r = spawnSync("/bin/sh", [join(spaced, "hooks", hook)], { cwd: dir, input: "{}", encoding: "utf8", env: { PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`, HOME: join(dir, "home") } });
+    assert.equal(r.status, 0, hook);
+    assert.doesNotMatch(r.stdout, /MODULE_NOT_FOUND|Cannot find module|wake exited/, `${hook}: ${r.stdout}`);
+    assert.doesNotMatch(r.stdout, /STALE VERDICT/, hook);
+  }
+});
