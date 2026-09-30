@@ -709,3 +709,19 @@ test('sudus scope <breach>... keep disposes every breach the one ok covers, one 
   assert.equal(one.status, 1);
   assert.match(one.stderr, /^sudus: usage: sudus scope <breach-sha or path>\.\.\. keep\|restore/);
 });
+
+// Issue #51: workspaceDelta sent a path holding a newline to hash-object --stdin-paths, which read
+// it as two paths and failed; the other hashing sites already hashed such a path on its own.
+test('workspaceDelta reads an unchanged path holding a newline or a leading quote as unchanged (issue #51)', async () => {
+  const { makeRepo } = await import('./helpers/repo.mjs');
+  const { writeTreeFromPaths } = await import('../lib/gitx.mjs');
+  const repo = await makeRepo();
+  try {
+    const paths = ['source\nvariant.txt', '"quoted".txt', 'plain.txt'];
+    for (const p of paths) await repo.write(p, 'content\n');
+    await repo.git('add', '-A'); await repo.git('commit', '-q', '-m', 'paths');
+    assert.deepEqual(await workspaceDelta(repo.dir, await writeTreeFromPaths(repo.dir, { paths })), []);
+    await repo.write('source\nvariant.txt', 'changed\n');
+    assert.deepEqual((await workspaceDelta(repo.dir, await writeTreeFromPaths(repo.dir, { paths: ['plain.txt', '"quoted".txt'] }))).map((d) => [d.path, d.change]), [['source\nvariant.txt', 'added']]);
+  } finally { await repo.remove(); }
+});

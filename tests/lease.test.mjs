@@ -206,6 +206,21 @@ test('a touched path whose bytes equal the start snapshot is unchanged; a modifi
   assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: ['src/a.mjs'], unchanged: [] });
   await end(cwd);
 });
+// Issue #54: snapshots hash raw bytes, and the touch comparison ran hash-object without
+// --no-filters, so a .gitattributes clean filter changed only the workspace side and an untouched
+// file read as changed.
+test('an unchanged touched file stays unchanged under a clean filter; a real edit is still changed (issue #54)', async () => {
+  const cwd = await initialized();
+  writeFileSync(join(cwd, '.gitattributes'), 'src/a.mjs filter=upper\n');
+  await git(['config', 'filter.upper.clean', "tr '[:lower:]' '[:upper:]'"], { cwd });
+  await git(['config', 'filter.upper.smudge', 'cat'], { cwd });
+  await git(['add', '-A'], { cwd }); await git(['commit', '-q', '-m', 'clean filter'], { cwd });
+  await begin(cwd, { action: 'implement', target: 'CORE-001', touch: ['src/a.mjs'], env: {} });
+  assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: [], unchanged: ['src/a.mjs'] });
+  writeFileSync(join(cwd, 'src/a.mjs'), 'export const a = 2;\n');
+  assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: ['src/a.mjs'], unchanged: [] });
+  await end(cwd);
+});
 // Review of 3.8.2: a --touch path that was a symlink out of the worktree was accepted, and `sudus
 // end` hashed touched files with --stdin-paths, which reads through a symlink: the outside file
 // was read, the link counted as changed, and it was declared a mechanism input.
