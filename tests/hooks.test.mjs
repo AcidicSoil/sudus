@@ -24,6 +24,8 @@ test("session-start names a missing link and durable refs in one line", () => {
   const line = r.stdout.split("\n").find((l) => l.startsWith("sudus: missing"));
   assert.ok(line, r.stdout);
   for (const s of ["command link ~/.local/bin/sudus", "durable ref refs/sudus/log", "durable ref refs/sudus/snapshots"]) assert.ok(line.includes(s), line);
+  // Issue #41: the items ran together with no separator between them.
+  assert.equal(line, "sudus: missing command link ~/.local/bin/sudus, durable ref refs/sudus/log, durable ref refs/sudus/snapshots");
   assert.equal(r.status, 0);
 });
 

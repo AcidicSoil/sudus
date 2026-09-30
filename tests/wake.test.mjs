@@ -74,6 +74,15 @@ test('missing durable refs print the exact fetch command from section 4, or name
   assert.equal(FETCH_LINE('origin'), v.line);
 });
 
+// Issue #41: a repository never initialized for Sudus has no settings file, and wake named a bare
+// `sudus init`, which refuses without --remote or --local-only: a choice the new-project and
+// existing-project skills ask the developer to make.
+test('wake names the skills, not a bare sudus init, in a repository with no settings file (issue #41)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'sudus-test-'));
+  spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+  assert.deepEqual(await wake(dir), { exit: 3, line: 'sudus: not initialized; run /new-project or /existing-project' });
+});
+
 // Deviation from the plan text: the real 'command-intent' schema (lib/records.mjs) is
 // {tx, command, identity, pre, writes} (plan 04's settled shape), not the plan's provisional
 // {transaction, command, inputs, expected, writes}; and the real 'superseded' schema carries
