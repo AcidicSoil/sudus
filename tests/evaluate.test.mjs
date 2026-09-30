@@ -1364,6 +1364,16 @@ describe('calibration', () => {
     assert.ok(upperBound(0, 60) < 0.05); assert.ok(upperBound(0, 30) > 0.05);
     assert.ok(upperBound(1, 60) > upperBound(0, 60));
   });
+  // Issue #47: the CDF started from (1-p)^n, which underflows to 0 for a large sample, so every
+  // term after it was 0 too and bisection returned a bound below the observed error rate.
+  test('the bound holds for large samples: never below the observed error rate, and monotone in errors (issue #47)', () => {
+    assert.ok(Math.abs(upperBound(2000, 20000) - 0.10355738442430919) < 1e-6, String(upperBound(2000, 20000)));
+    for (const [errors, n] of [[0, 60], [1, 60], [3, 100], [50, 1000], [2000, 20000], [100, 100000], [9999, 10000]]) {
+      assert.ok(upperBound(errors, n) >= errors / n, `${errors}/${n}`);
+    }
+    for (let e = 0; e < 40; e++) assert.ok(upperBound(e + 1, 5000) > upperBound(e, 5000), String(e));
+    assert.equal(upperBound(20000, 20000), 1);
+  });
   // Controller Ruling 3: the labelled sample is the subset that can exist under the current
   // record set -- measurements whose `suggested` was 'agent' that were nonetheless escalated and
   // later answered with --owner. This helper drives exactly that path: measure() an agent-
