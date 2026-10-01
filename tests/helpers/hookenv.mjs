@@ -14,6 +14,9 @@ export function throwawayRepo() {
     return r.stdout;
   };
   git("init", "-q", "-b", "main"); git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t");
+  // git commit starts auto maintenance detached, which can create and remove
+  // .git/objects/maintenance.lock while a test fingerprints the repository.
+  git("config", "maintenance.auto", "false");
   writeFileSync(join(dir, "README.md"), "throwaway\n"); git("add", "README.md"); git("commit", "-q", "-m", "first");
   return { dir, git };
 }
