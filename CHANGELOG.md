@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.10 - 2026-09-30
+
+- Wake reads the log once per check, not once per escalation, finding, backlog item or defect (issue #57). The checks for open escalations, open findings, waiting and promotable backlog items, captured items, fixed defects and the Waiting verdict's list each scanned the whole log for every thing they asked about, so their work grew with that number times the log's length. On reactive-tui's log grown 16 times with its work (38,624 records), they take 24 ms instead of 1,309 ms; at its 2,414 records today, 1 ms instead of 7. Every answer is unchanged: compared with 4.2.9 at every prefix of five project logs and eleven scenario logs, 356,978 comparisons agreed. `sudus show items` reads the log the same way.
+
 ## 4.2.9 - 2026-09-30
 
 - Wake between commitments finds the ok on a backlog item's wait escalation once (found while evaluating issue #57). It was found again for every record before it, each time a scan of the log, so the promote check and the Done listing grew with the square of the log's length: on a 2,375-record log, three waiting items cost 202 ms per wake, and 3,082 ms at four times the length. They now cost 0 to 2 ms at those sizes.
