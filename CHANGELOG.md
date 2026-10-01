@@ -7,6 +7,11 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.12 - 2026-10-01
+
+- After a supersession, a roadmap breach can be kept or restored (issue #62). The breach captured the roadmap before the successor's start rewrote its `Current:` line, so keep refused even with the developer's ok, restore refused too, and wake named `scope docs/spec/roadmap.md` indefinitely. Keep and restore now read a `Current:` line naming the open commitment as the start's own write. Any other difference still refuses: other bytes, a mode change, or `Current:` naming another commitment.
+- The hook tests turn off git's auto maintenance in the throwaway repositories they build. Its lock file appeared and vanished after a commit and could fall between two fingerprints, failing a test that no hook had changed.
+
 ## 4.2.11 - 2026-10-01
 
 - Under Codex the stop hook prints one JSON object (issue #61). Codex reads a Stop hook's output as JSON and failed every stop with "hook returned invalid stop hook JSON output". Where Codex runs the plugin's hooks, it sets `PLUGIN_ROOT`, and the stop hook then prints the same lines, including the version-mismatch and "wake exited" lines, as one `{"systemMessage": ...}` object. Codex shows it to you, and it never blocks the stop. A stop hook registered by hand in Codex takes the argument `codex`. Without `PLUGIN_ROOT` (Claude Code sets only `CLAUDE_PLUGIN_ROOT`) the hook prints as before, and `hooks/hooks.json` is unchanged, so Codex does not ask you to trust the hooks again.
