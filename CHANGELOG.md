@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.11 - 2026-10-01
+
+- Under Codex the stop hook prints one JSON object (issue #61). Codex reads a Stop hook's output as JSON and failed every stop with "hook returned invalid stop hook JSON output". Where Codex runs the plugin's hooks, it sets `PLUGIN_ROOT`, and the stop hook then prints the same lines, including the version-mismatch and "wake exited" lines, as one `{"systemMessage": ...}` object. Codex shows it to you, and it never blocks the stop. A stop hook registered by hand in Codex takes the argument `codex`. Without `PLUGIN_ROOT` (Claude Code sets only `CLAUDE_PLUGIN_ROOT`) the hook prints as before, and `hooks/hooks.json` is unchanged, so Codex does not ask you to trust the hooks again.
+
 ## 4.2.10 - 2026-09-30
 
 - Wake reads the log once per check, not once per escalation, finding, backlog item or defect (issue #57). The checks for open escalations, open findings, waiting and promotable backlog items, captured items, fixed defects and the Waiting verdict's list each scanned the whole log for every thing they asked about, so their work grew with that number times the log's length. On reactive-tui's log grown 16 times with its work (38,624 records), they take 24 ms instead of 1,309 ms; at its 2,414 records today, 1 ms instead of 7. Every answer is unchanged: compared with 4.2.9 at every prefix of five project logs and eleven scenario logs, 356,978 comparisons agreed. `sudus show items` reads the log the same way.
