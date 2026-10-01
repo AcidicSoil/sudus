@@ -250,3 +250,81 @@ test("each hook runs the plugin's own copy when its path holds a space (issue #5
     assert.doesNotMatch(r.stdout, /STALE VERDICT/, hook);
   }
 });
+
+// Issue #61: Codex reads a Stop hook's stdout, when the hook exits 0, as blank or as one JSON
+// object holding only these fields, and fails the hook on anything else ("hook returned invalid
+// stop hook JSON output"); codex-rs/hooks/src/events/stop.rs and schema.rs at rust-v0.159.3.
+// SessionStart and UserPromptSubmit take plain text as context unless it starts like JSON. Codex
+// sets PLUGIN_ROOT for a plugin's hooks; Claude Code sets CLAUDE_PLUGIN_ROOT alone.
+const CODEX_STOP_FIELDS = { continue: "boolean", stopReason: "string", suppressOutput: "boolean", systemMessage: "string", decision: "string", reason: "string" };
+function codexStop(stdout) {
+  if (stdout.trim() === "") return {};
+  const v = JSON.parse(stdout.trim());
+  assert.ok(v !== null && typeof v === "object" && !Array.isArray(v), stdout);
+  for (const [k, x] of Object.entries(v)) assert.equal(typeof x, CODEX_STOP_FIELDS[k], `${k} in ${stdout}`);
+  assert.equal(v.decision, undefined, stdout); assert.notEqual(v.continue, false, stdout);
+  return v;
+}
+const codexEnv = (dir, opts) => {
+  const bin = join(dir, "fakebin");
+  fakeSudus(bin, opts);
+  return { PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`, HOME: join(dir, "home"), PLUGIN_ROOT: ROOT, CLAUDE_PLUGIN_ROOT: ROOT };
+};
+
+test("under Codex, stop prints the wake lines as one systemMessage Codex accepts, never a block (issue #61)", () => {
+  const cases = [
+    [{ stdout: RESOLVABLE }, RESOLVABLE.trimEnd()],
+    [{ stdout: "Done: commitment c1 is finished\n" }, "Done: commitment c1 is finished"],
+    [{ stdout: "sudus: not a Sudus project; run /new-project or /existing-project\n", exit: 3 }, "sudus: not a Sudus project; run /new-project or /existing-project"],
+    [{ stdout: "sudus: log unreadable\n", exit: 1 }, "sudus: log unreadable\nsudus: wake exited 1"],
+  ];
+  for (const [fake, text] of cases) {
+    const { dir } = throwawayRepo();
+    const r = runHook("stop.sh", { cwd: dir, env: codexEnv(dir, fake), stdin: JSON.stringify({ hook_event_name: "Stop", turn_id: "t1", stop_hook_active: false }) });
+    assert.equal(r.status, 0); assert.equal(r.stderr, "");
+    assert.deepEqual(codexStop(r.stdout), { systemMessage: text });
+  }
+});
+
+test("a Stop hook registered by hand in Codex passes codex and prints the same object (issue #61)", () => {
+  const { dir } = throwawayRepo();
+  const { PLUGIN_ROOT, CLAUDE_PLUGIN_ROOT, ...e } = codexEnv(dir, { stdout: RESOLVABLE });
+  const r = runHook("stop.sh", { cwd: dir, env: e, args: ["codex"] });
+  assert.equal(r.status, 0);
+  assert.deepEqual(codexStop(r.stdout), { systemMessage: RESOLVABLE.trimEnd() });
+});
+
+test("under Codex, the version-mismatch line and the plugin copy's verdict share the one systemMessage (issue #61)", () => {
+  const { dir } = throwawayRepo();
+  const r = runHook("stop.sh", { cwd: dir, env: codexEnv(dir, { stdout: "STALE VERDICT", version: "0.0.1" }) });
+  assert.equal(r.status, 0);
+  const { systemMessage } = codexStop(r.stdout);
+  assert.match(systemMessage, /^sudus: the sudus command found runs 0\.0\.1, this plugin is /);
+  assert.ok(systemMessage.split("\n").length > 1, systemMessage);
+  assert.doesNotMatch(systemMessage, /STALE VERDICT|wake exited/);
+});
+
+test("under Codex, the systemMessage keeps quotes, backslashes, control bytes and UTF-8 exactly (issue #61)", () => {
+  const text = 'Resolvable: say "hi" \\ back\tslash\x01\x1f end\ncaf\u00e9 \u2014 ok\r\nlast';
+  const { dir } = throwawayRepo();
+  const r = runHook("stop.sh", { cwd: dir, env: codexEnv(dir, { stdout: text }) });
+  assert.equal(r.status, 0);
+  assert.deepEqual(codexStop(r.stdout), { systemMessage: text });
+});
+
+test("without PLUGIN_ROOT or codex, stop prints the plain lines: CLAUDE_PLUGIN_ROOT alone, as Claude Code sets, is not Codex (issue #61)", () => {
+  const { dir } = throwawayRepo();
+  const { PLUGIN_ROOT, ...e } = codexEnv(dir, { stdout: RESOLVABLE });
+  assert.equal(runHook("stop.sh", { cwd: dir, env: e }).stdout, RESOLVABLE);
+  assert.equal(runHook("stop.sh", { cwd: dir, env: { PATH: e.PATH, HOME: e.HOME } }).stdout, RESOLVABLE);
+});
+
+test("under Codex, session-start and turn print plain text Codex takes as context (issue #61)", () => {
+  for (const name of ["session-start.sh", "turn.sh"]) {
+    const { dir } = throwawayRepo();
+    const r = runHook(name, { cwd: dir, env: codexEnv(dir, { stdout: RESOLVABLE }) });
+    assert.equal(r.status, 0);
+    assert.ok(r.stdout.includes(RESOLVABLE), r.stdout);
+    assert.ok(!/^[{[]/.test(r.stdout.trimStart()), `${name}: ${r.stdout}`);
+  }
+});

@@ -44,8 +44,8 @@ export function fingerprint(dir) {
   return h.digest("hex");
 }
 
-export function runHook(name, { cwd, env = {}, stdin = "{}" }) {
-  const r = spawnSync("sh", [join(ROOT, "hooks", name)], { cwd, input: stdin, encoding: "utf8", env: { HOME: cwd, PATH: "/usr/bin:/bin", ...env } });
+export function runHook(name, { cwd, env = {}, stdin = "{}", args = [] }) {
+  const r = spawnSync("sh", [join(ROOT, "hooks", name), ...args], { cwd, input: stdin, encoding: "utf8", env: { HOME: cwd, PATH: "/usr/bin:/bin", ...env } });
   return { stdout: r.stdout, stderr: r.stderr, status: r.status };
 }
 

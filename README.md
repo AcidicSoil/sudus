@@ -336,7 +336,9 @@ its version, it uses the
 plugin's copy and prints the one command that installs the shim. No hook
 creates the link, refuses a stop, counts anything, or writes a record; a
 hook only prints, and a harness without hooks relies on the working
-agreement in `AGENTS.md`.
+agreement in `AGENTS.md`. Codex reads a Stop hook's output as JSON, so
+under Codex the stop hook prints the same lines as one `systemMessage`
+object, which Codex shows and which never blocks the stop.
 Make sure `$HOME/.local/bin` is on your `PATH`:
 
 ```sh
@@ -402,7 +404,9 @@ either name, or the checkout at `$HOME/.local/share/sudus` or
 file at that path. Put `$HOME/.local/bin`
 on your `PATH` as above and check `sudus --help`. Then register the hooks
 under `hooks/` with your agent's own hook configuration, once, using the
-event names in `hooks/hooks.json`. They are optional: the working
+event names in `hooks/hooks.json`. In Codex, give the stop hook the
+argument `codex` (`sh <path>/hooks/stop.sh codex`) so it prints the JSON
+Codex reads at Stop. They are optional: the working
 agreement in `AGENTS.md` is the path an agent takes without them. Skills
 come with the plugin, go into your agent's skill directory through the
 skills CLI, or are linked from `skills/` by you.
