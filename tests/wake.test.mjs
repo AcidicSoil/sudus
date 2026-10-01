@@ -1332,3 +1332,90 @@ test('wake names a fail receipt from before a redeclare that kept the command, a
   assert.equal(await main(['review', 'mechanism', 'A-001'], { cwd, stdout: { write: () => {} }, stderr: { write: (s) => { err += s; } } }), 1);
   assert.match(err, /^sudus: no fail receipt for A-001 ran under the current command, working directory, results mode and text; make its violating example fail/);
 });
+
+// Issue #57: progressSummary counts open findings, open escalations and unfixed defects on every
+// wake. Each finding, escalation and defect scanned the log, so the work grew with them times the
+// log. Reads of each record's kind and sha are counted at k and 2k of each: one pass per check
+// doubles them, a scan per finding quadruples them.
+test('progressSummary reads the log in proportion to its length, not its findings and escalations times its length', async () => {
+  const { progressSummary } = await import('../lib/wake.mjs');
+  const { range } = await import('../lib/records.mjs');
+  let reads = 0;
+  const hex = (n) => n.toString(16).padStart(40, '0');
+  const rec = (sha, kind, payload) => ({ get sha() { reads++; return sha; }, get kind() { reads++; return kind; }, target: '-', payload });
+  // Each round: a review with two findings, the first resolved and the second named by an
+  // escalation answered ok (odd rounds) or left unanswered (even rounds); a defect item, fixed in
+  // odd rounds.
+  const build = (k) => {
+    const log = [rec(hex(1), 'start', { slug: 'first', requirements: [], from_superseded: null })];
+    for (let i = 0; i < k; i++) {
+      const rev = hex(100 * i + 2), esc = hex(100 * i + 3), def = hex(100 * i + 4);
+      log.push(rec(rev, 'review', { slug: 'first', findings: [{ n: 1, text: 'one' }, { n: 2, text: 'two' }] }));
+      log.push(rec(hex(100 * i + 5), 'resolution', { source: rev, finding: 1 }));
+      log.push(rec(esc, 'escalation', { slug: 'first', concerns: `finding:${rev}#2` }));
+      if (i % 2) log.push(rec(hex(100 * i + 6), 'answer', { escalation: esc, kind: 'ok' }));
+      log.push(rec(def, 'item', { kind: 'defect', slug: `bug-${i}`, source: 'DEMO-001' }));
+      if (i % 2) log.push(rec(hex(100 * i + 7), 'fix', { item: def }));
+    }
+    return log;
+  };
+  const count = (log) => {
+    const r = range(log);
+    const st = { log, range: r, start: r.start, records: r.records, closed: r.closed, set: [], current: {}, slug: 'first' };
+    reads = 0;
+    const summary = progressSummary(st);
+    return { reads, summary };
+  };
+  const small = count(build(100)), large = count(build(200));
+  assert.ok(large.reads < 3 * small.reads, `${small.reads} reads at 100 rounds, ${large.reads} at 200`);
+  // Every finding is resolved or held by its escalation; 50 escalations and 50 defects stay open.
+  assert.equal(small.summary.obligations, 100);
+  assert.equal(small.summary.answered, 50);
+});
+
+// Issue #57 review: the fix predicate judged each defect's fix with its own scans of the log (its
+// last fix, its base, its position), and the Waiting verdict looked up each record its escalation
+// names with a scan. Reads of kind and sha are counted at k and 2k defects and concerns.
+test('the fix predicate and the Waiting verdict read the log in proportion to its length', async () => {
+  const { predicates } = await import('../lib/wake.mjs');
+  let reads = 0;
+  const hex = (n) => n.toString(16).padStart(40, '0');
+  const rec = (sha, kind, payload) => ({ get sha() { reads++; return sha; }, get kind() { reads++; return kind; }, target: 'first', payload });
+  const fixPredicate = predicates.find((p) => p.name === 'fix'), waiting = predicates.find((p) => p.name === 'waiting');
+  const digest = 'sha256:' + '0'.repeat(64);
+  // Between commitments: k defects, each fixed, then a pass for their requirement.
+  const defects = (k) => {
+    const log = [rec(hex(1), 'start', { slug: 'first', snapshot: hex(500000), requirements: [], from_superseded: null, intent: null, results: [] }),
+      rec(hex(2), 'done', { slug: 'first', snapshot: hex(500000) })];
+    for (let i = 0; i < k; i++) log.push(rec(hex(10 * i + 3), 'item', { kind: 'defect', slug: `bug-${i}`, source: 'DEMO-001', body: 'bug' }),
+      rec(hex(10 * i + 4), 'fix', { item: hex(10 * i + 3), snapshot: hex(500000) }));
+    log.push(rec(hex(500001), 'receipt', { mechanism: 'demo', definition_digest: digest, input: hex(500000), product_digest: digest, status: 'ran', identity: {},
+      results: [{ requirement: 'DEMO-001', text_digest: digest, result: 'pass' }], output: digest, exit: { code: 0, signal: null } }));
+    return log;
+  };
+  const fixReads = async (k) => {
+    const st = { log: defects(k), closed: true, set: [], current: { 'DEMO-001': { sha: hex(500001), result: 'pass' } } };
+    reads = 0;
+    assert.equal(await fixPredicate.test(st), null, 'every defect has a fix and a later pass');
+    return reads;
+  };
+  const f100 = await fixReads(100), f200 = await fixReads(200);
+  assert.ok(f200 < 3 * f100, `fix predicate: ${f100} reads at 100 defects, ${f200} at 200`);
+  // One open escalation naming k backlog items to retire.
+  const named = (k) => {
+    const log = Array.from({ length: k }, (_, i) => rec(hex(i + 1), 'item', { kind: 'backlog', slug: `later-${i}`, source: 'DEMO-001', body: 'idea' }));
+    log.push(rec(hex(k + 1), 'escalation', { slug: 'first', question: 'q', recommendation: 'r', because: 'b', if_wrong: 'i', instead: 's', evaluation: null,
+      concerns: Array.from({ length: k }, (_, i) => `retire:${hex(i + 1)}`).join(' ') }));
+    return log;
+  };
+  const waitReads = async (k) => {
+    const st = { log: named(k), settings: { developer: 'present' } };
+    reads = 0;
+    const v = await waiting.test(st);
+    assert.equal(v.escalation.closes.length, k);
+    assert.equal(v.escalation.closes[k - 1], `backlog item later-${k - 1}`);
+    return reads;
+  };
+  const w100 = await waitReads(100), w200 = await waitReads(200);
+  assert.ok(w200 < 3 * w100, `Waiting: ${w100} reads at 100 concerns, ${w200} at 200`);
+});
