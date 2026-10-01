@@ -911,7 +911,11 @@ sudus scope <breach-sha> <breach-sha> <breach-sha> keep
 
 Your ok keeps the bytes the breach captured. If the path changed after
 that, keep refuses; the agent puts the captured bytes back, or restores
-the path and asks again about the new bytes as a new breach.
+the path and asks again about the new bytes as a new breach. After a
+supersession, the successor's start writes the roadmap's `Current:` line
+itself, after the breach captured the roadmap; keep and restore read a
+`Current:` line that names the open commitment as that write, not as a
+change to the path.
 
 A later `sudus declare` cannot retroactively clear an existing breach; it
 only legalizes future changes.
