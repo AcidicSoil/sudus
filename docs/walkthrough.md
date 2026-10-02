@@ -47,7 +47,7 @@ sudus wake
 Outside an initialized project, wake exits 3 and names what continues:
 
 ```text
-sudus init  (durable refs refs/sudus/log, refs/sudus/snapshots are missing and no authority remote is configured)
+sudus: not initialized; run /new-project or /existing-project
 ```
 
 The agent asks you two things in conversation: the authority remote (a

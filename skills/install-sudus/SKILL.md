@@ -26,7 +26,7 @@ Install the Sudus plugin from its marketplace. The plugin registers the hooks in
 Install the plugin with `muse plugins install <plugin root>`, then approve its two hooks with `muse plugins approve sudus:hook:session-start` and `muse plugins approve sudus:hook:stop`; its manifest registers SessionStart and Stop. Continue at `link`.
 
 ### `other`
-Install the five skills with the skills CLI (`npx skills add eas4ai/sudus --skill install-sudus new-project existing-project next-feature report-sudus-issue --global`), then run this skill. Register `hooks/session-start.sh`, `hooks/turn.sh` and `hooks/stop.sh` under the harness's own event names where it has them. No hook system: `nohooks`.
+Install the five skills with the skills CLI (`npx skills add eas4ai/sudus --skill install-sudus new-project existing-project next-feature report-sudus-issue --global`), then run this skill. Register `hooks/session-start.sh`, `hooks/turn.sh` and `hooks/stop.sh` under the harness's own event names where it has them. In Codex, register the stop hook as `sh <root>/hooks/stop.sh codex`, so it prints the JSON Codex reads at Stop. No hook system: `nohooks`.
 
 ### `nohooks`
 Instruction-only: the working agreement in AGENTS.md is the enforcement and the agent runs `sudus wake` itself. Continue at `link`.

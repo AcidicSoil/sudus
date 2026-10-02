@@ -199,3 +199,14 @@ test("every template path a skill names exists relative to that skill", () => {
     for (const p of paths) assert.ok(existsSync(join(ROOT, "skills", name, p)), `${name}/SKILL.md names ${p}, which does not exist from skills/${name}`);
   }
 });
+
+// Issue #43: the work-loop diagram says its action table is in precedence order, and it had no
+// supersede or fold row after wake gained both. commit, implement and escalate are rows of their
+// own in the diagram but share the record and run predicates in wake's order.
+test("the work-loop diagram's action table lists every action wake names, in wake's order (issue #43)", async () => {
+  const { ORDER } = await import("../lib/wake.mjs");
+  const dot = readFileSync(join(ROOT, "docs/diagrams/work-loop.dot"), "utf8");
+  const SAME = { commit: "record", implement: "run", escalate: "run" };
+  const rows = [...dot.matchAll(/<TR><TD ALIGN="LEFT">([^<]+)<\/TD>/g)].map((m) => m[1].replace(/( [A-Z]+)+$/, "")).map((a) => SAME[a] ?? a);
+  assert.deepEqual([...new Set(rows)], ORDER.filter((a) => a !== "waiting"));
+});

@@ -455,7 +455,10 @@ and `sudus review mechanism`. It has two separately digested parts:
   requirements, `results: per-requirement`, and a declared **execution
   identity**. The identity may contain runtime and tool versions, container or
   image identity, and named non-secret environment values. It records declared
-  values verbatim. It never hashes or records undeclared environment values.
+  values verbatim, except that the password in a URL's userinfo and the value
+  of a password- or token-named query parameter are recorded as `[redacted]`,
+  since a connection URL is a common declared value that carries one. It never
+  hashes or records undeclared environment values.
 - The **review metadata**: for each requirement, the detection digest (the
   digest of the command, working directory and results mode) and the
   definition digest against which it was accepted, the requirement text

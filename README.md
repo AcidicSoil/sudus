@@ -353,7 +353,11 @@ its version, it uses the
 plugin's copy and prints the one command that installs the shim. No hook
 creates the link, refuses a stop, counts anything, or writes a record; a
 hook only prints, and a harness without hooks relies on the working
-agreement in `AGENTS.md`.
+agreement in `AGENTS.md`. Under Codex the per-turn hook already gives
+the agent the verdict, so the stop hook prints nothing for a routine
+verdict. It shows you only what needs you, a version problem or a wake
+that failed, as one `systemMessage` object, the JSON Codex reads at
+Stop; it never blocks the stop.
 Make sure `$HOME/.local/bin` is on your `PATH`:
 
 ```sh
@@ -419,7 +423,9 @@ either name, or the checkout at `$HOME/.local/share/sudus` or
 file at that path. Put `$HOME/.local/bin`
 on your `PATH` as above and check `sudus --help`. Then register the hooks
 under `hooks/` with your agent's own hook configuration, once, using the
-event names in `hooks/hooks.json`. They are optional: the working
+event names in `hooks/hooks.json`. In Codex, give the stop hook the
+argument `codex` (`sh <path>/hooks/stop.sh codex`) so it prints the JSON
+Codex reads at Stop. They are optional: the working
 agreement in `AGENTS.md` is the path an agent takes without them. Skills
 come with the plugin, go into your agent's skill directory through the
 skills CLI, or are linked from `skills/` by you.
@@ -459,8 +465,10 @@ it does, the agent asks you one thing in conversation: which Git remote
 holds the records, or explicit local-only operation. Your decisions are
 attested: your words as the agent quoted them, with your Git author. To
 have them signed with a key instead, set `signing_key` in
-`.sudus/settings.json` (see the manual's Settings section). Nothing else in
-Sudus asks for setup, and you never type a command yourself.
+`.sudus/settings.json` (see the manual's Settings section). Either way the
+record is evidence of your decision, not a security boundary; the manual's
+Attested or signed section says what each shows. Nothing else in Sudus asks
+for setup, and you never type a command yourself.
 
 The agent should explain requirements in terms you understand and propose
 observable failures that would show they are not met. Sudus calls one of
@@ -589,7 +597,8 @@ can make rechecking expensive. Narrow inputs need careful maintenance.
 
 Sudus is a discipline tool, not a security boundary. It checks recorded
 results and freshness; it cannot judge whether a review is thorough or a
-check proves what it claims to. The developer must challenge unsound
+check proves what it claims to. The adversary's read-only role is an
+instruction in its brief, which no supported harness enforces. The developer must challenge unsound
 checks, and the agent must demonstrate what makes them fail.
 
 ## Find your way around

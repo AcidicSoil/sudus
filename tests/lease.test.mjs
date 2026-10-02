@@ -206,6 +206,21 @@ test('a touched path whose bytes equal the start snapshot is unchanged; a modifi
   assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: ['src/a.mjs'], unchanged: [] });
   await end(cwd);
 });
+// Issue #54: snapshots hash raw bytes, and the touch comparison ran hash-object without
+// --no-filters, so a .gitattributes clean filter changed only the workspace side and an untouched
+// file read as changed.
+test('an unchanged touched file stays unchanged under a clean filter; a real edit is still changed (issue #54)', async () => {
+  const cwd = await initialized();
+  writeFileSync(join(cwd, '.gitattributes'), 'src/a.mjs filter=upper\n');
+  await git(['config', 'filter.upper.clean', "tr '[:lower:]' '[:upper:]'"], { cwd });
+  await git(['config', 'filter.upper.smudge', 'cat'], { cwd });
+  await git(['add', '-A'], { cwd }); await git(['commit', '-q', '-m', 'clean filter'], { cwd });
+  await begin(cwd, { action: 'implement', target: 'CORE-001', touch: ['src/a.mjs'], env: {} });
+  assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: [], unchanged: ['src/a.mjs'] });
+  writeFileSync(join(cwd, 'src/a.mjs'), 'export const a = 2;\n');
+  assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: ['src/a.mjs'], unchanged: [] });
+  await end(cwd);
+});
 // Review of 3.8.2: a --touch path that was a symlink out of the worktree was accepted, and `sudus
 // end` hashed touched files with --stdin-paths, which reads through a symlink: the outside file
 // was read, the link counted as changed, and it was declared a mechanism input.
@@ -255,6 +270,36 @@ test('covers: a lease covers its target inputs and its touch list', async () => 
 
 import { withCheckLock } from '../lib/lease.mjs';
 import { readFileSync } from 'node:fs';
+
+// Issue #58: the touch comparison parses ls-tree -z and hashes one by one the paths --stdin-paths
+// cannot take, as snapshots do, so an untouched file with a tab or a newline in its name is
+// unchanged.
+test('untouched files named with a tab or a newline are unchanged touches (issue #58)', async () => {
+  const cwd = await initialized();
+  const names = ['src/tab\tname.mjs', 'src/new\nline.mjs'];
+  for (const n of names) writeFileSync(join(cwd, n), 'export const x = 1;\n');
+  await git(['add', '-A'], { cwd }); await git(['commit', '-q', '-m', 'awkward names'], { cwd });
+  await begin(cwd, { action: 'implement', target: 'CORE-001', touch: names, env: {} });
+  assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: [], unchanged: names });
+  writeFileSync(join(cwd, names[1]), 'export const x = 2;\n');
+  assert.deepEqual(await touchOutcome(cwd, await readLease(cwd)), { changed: [names[1]], unchanged: [names[0]] });
+  await end(cwd);
+});
+
+// Issue #48: a dangling symlink at the lock path gives EEXIST to the exclusive create and ENOENT to
+// the read, and `attempt--` retried that without end in a synchronous loop. Run in a child with a
+// timeout, so a loop brought back cannot hang the suite.
+test('a dangling symlink at the check lock is a bounded refusal naming it, not an endless retry (issue #48)', async () => {
+  const { execFile } = await import('node:child_process');
+  const { pathToFileURL } = await import('node:url');
+  const cwd = await initialized();
+  await symlink('missing-target', await gitPath(cwd, 'sudus-check.lock'));
+  const script = `import { withCheckLock } from ${JSON.stringify(pathToFileURL(join(process.cwd(), 'lib/lease.mjs')).href)};
+try { await withCheckLock(${JSON.stringify(cwd)}, async () => console.log('acquired')); } catch (e) { console.log(e.message); }`;
+  const r = await new Promise((resolve) => execFile(process.execPath, ['--input-type=module', '-e', script], { timeout: 10000, killSignal: 'SIGKILL' }, (error, stdout) => resolve({ error, stdout })));
+  assert.equal(r.error?.killed ?? false, false, 'withCheckLock did not return within 10 s');
+  assert.match(r.stdout, /sudus-check\.lock is a symlink; remove it by hand, then retry/);
+});
 
 test('the check lock is held only for the run and nests inside an action lease', async () => {
   const cwd = await initialized();

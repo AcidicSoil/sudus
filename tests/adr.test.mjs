@@ -28,6 +28,18 @@ test('decide appends one canonical line with a base snapshot; readAdr returns it
   assert.equal(await adrDigest(repo.cwd), sha256(text));
 });
 
+test('a decision after one holding a multi-byte character is appended, not refused as a scope violation (issue #37)', async () => {
+  // The bookkeeping check sliced the decoded text at the old file's byte length, so after a
+  // multi-byte character it parsed a cut-off line and refused every later append.
+  const repo = await project();
+  const first = await decide(repo.cwd, { ...draft, title: 'Keep the menu label Extract…', body: 'An ellipsis: … and an e-acute: é.' });
+  const second = await decide(repo.cwd, { ...draft, title: 'Second decision', body: 'Plain ASCII.' });
+  const third = await decide(repo.cwd, { ...draft, title: 'Third, after two', body: 'More text: — ✓.' });
+  const lines = await readAdr(repo.cwd);
+  assert.deepEqual(lines.map((l) => l.id), [first, second, third]);
+  assert.equal(lines[0].title, 'Keep the menu label Extract…');
+});
+
 test('a decision naming an interface path records the interface hit', async () => {
   const repo = await project();
   const id = await decide(repo.cwd, { ...draft, named_paths: ['src/api/greet.mjs', 'src/main.mjs'] });

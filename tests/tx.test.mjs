@@ -554,7 +554,7 @@ test('Fix round 2 finding 5: a lock path that keeps disappearing and reappearing
   // with O_CREAT|O_EXCL on a path that is a symlink fails EEXIST regardless of the target, and a
   // read through it fails ENOENT since the target never exists. No real concurrency needed.
   symlinkSync(join(cwd, 'nonexistent-lock-target'), lock);
-  await assert.rejects(acquireLock(cwd, 'TXBOUND'), /^TxError: sudus: sudus-tx.lock keeps disappearing and reappearing; remove it by hand and retry/);
+  await assert.rejects(acquireLock(cwd, 'TXBOUND'), /^TxError: sudus: sudus-tx.lock is a symlink; remove it by hand, then retry/);   // issue #58: the check lock's wording
 });
 
 import { writeInputSnapshot } from '../lib/snapshots.mjs';

@@ -153,3 +153,43 @@ test('a path component named __proto__ or constructor is an ordinary tree entry,
   const entries = await listTree(repo.dir, written);
   assert.deepEqual(entries.map((e) => e.path).sort(), ['src/__proto__/x.mjs', 'src/a.txt', 'src/constructor/x.mjs']);
 });
+
+// Issue #50: listTree split each -z record on every tab and kept the second piece, so a path with
+// an embedded tab lost everything after it. Newlines and a leading quote round-trip here too.
+test('listTree keeps a path whole when it holds a tab, a newline or a leading quote (issue #50)', async (t) => {
+  const repo = await makeRepo(); t.after(repo.remove);
+  const paths = ['source\tvariant.txt', 'line\nbreak.txt', '"quoted".txt', 'dir/in\tner.txt'];
+  for (const p of paths) await repo.write(p, 'content\n');
+  const tree = await writeTreeFromPaths(repo.dir, { paths });
+  assert.deepEqual((await listTree(repo.dir, tree)).map((e) => e.path).sort(), [...paths].sort());
+});
+
+// Issue #49: the in-memory tree sorted entry names as JavaScript strings (UTF-16 code units), and
+// Git sorts tree entries by their bytes. The orders differ for a private-use BMP character against a
+// supplementary-plane one, so the read-only identity disagreed with git write-tree for good.
+test('treeIdentityReadOnly matches git write-tree for names whose UTF-16 and byte orders differ (issue #49)', async (t) => {
+  const repo = await makeRepo(); t.after(repo.remove);
+  const paths = ['\ue000.txt', '\u{1f600}.txt', 'd\ue000/a.txt', 'd\u{1f600}/b.txt', 'caf\u00e9', 'caf\u00e9.txt', 'e\u0301.txt', 'Z.txt', 'a.txt'];
+  for (const p of paths) await repo.write(p, 'content\n');
+  assert.equal(await treeIdentityReadOnly(repo.dir, { paths, exclude: [] }), await writeTreeFromPaths(repo.dir, { paths }));
+});
+
+// Issue #58: one set of awkward names goes through every tree and hashing consumer, so the rules
+// those consumers share (ls-tree -z parsing, which paths --stdin-paths can take, raw-byte hashing,
+// byte order) cannot drift apart again unseen. The read-only identity must equal git write-tree.
+test('one set of awkward names reads alike through the tree builders, listTree and workspaceDelta (issue #58)', async (t) => {
+  const repo = await makeRepo(); t.after(repo.remove);
+  const { workspaceDelta } = await import('../lib/scope.mjs');
+  const files = ['plain.txt', 'tab\tname.txt', 'new\nline.txt', '"quoted".txt', ' leading space.txt', 'caf\u00e9.txt', '\ue000.txt', '\u{1f600}.txt', 'foo.txt', 'foo/inner.txt', 'foo-bar.txt', 'dir/sub/deep.txt', 'exec.sh'];
+  for (const p of files) await repo.write(p, `content of ${JSON.stringify(p)}\n`);
+  await chmod(join(repo.dir, 'exec.sh'), 0o755);
+  await symlink('plain.txt', join(repo.dir, 'link'));
+  const paths = [...files, 'link'];
+  await repo.git('add', '-A'); await repo.git('commit', '-q', '-m', 'awkward names');
+  const written = await writeTreeFromPaths(repo.dir, { paths });
+  assert.equal(await treeIdentityReadOnly(repo.dir, { paths, exclude: [] }), written);
+  assert.deepEqual((await listTree(repo.dir, written)).map((e) => e.path).sort(), [...paths].sort());
+  const modes = Object.fromEntries((await listTree(repo.dir, written)).map((e) => [e.path, e.mode]));
+  assert.deepEqual([modes['exec.sh'], modes.link, modes['plain.txt']], ['100755', '120000', '100644']);
+  assert.deepEqual((await workspaceDelta(repo.dir, written)).filter((d) => paths.includes(d.path)), []);
+});

@@ -443,8 +443,10 @@ src/new-file.mjs` also declares a new file as an input for the life of the
 lease, so writing to it is not an undeclared change. The target must be a
 requirement that exactly one mechanism declares, because `sudus end`
 writes the touch into that mechanism; a touch on a `resolve` or `fix`
-lease is refused, since nothing would write it. After committing the
-work:
+lease is refused, since nothing would write it. The fix for a finding
+takes `sudus begin resolve <slug>`: a lease on the open commitment's
+slug covers the inputs of every mechanism its requirements name. After
+committing the work:
 
 ```sh
 sudus end --lease <the-sha-begin-printed>
@@ -529,6 +531,12 @@ agent that edits `signing_key` to its own key, or to `null`, cannot approve
 that edit or sign anything after it. Replacing or removing your key takes a
 signature from it, so keep the private key: Sudus has no way to remove a
 key you can no longer sign with.
+
+Neither mode is a security boundary. An attested record is the agent's
+quote of your words. A signature shows only that whoever holds the private
+key signed those exact bytes, so it shows the decision was yours only while
+the agent cannot read that key. What Sudus relies on is that you gave the
+answer yourself, in the conversation.
 
 ## Decisions that did not stop the work
 
@@ -755,8 +763,10 @@ This writes a brief record and the brief file, and prints the file's path
 and the instruction for starting the adversary: one fresh subagent in the
 same harness, with none of the builder's conversation, the brief file as
 its entire prompt, and the model settings name (`any` when they name none).
-The adversary works in the project itself and reads only. It builds
-nothing, runs no tests and no project code, and starts no subagents. The
+The brief tells the adversary to work in the project itself and read only:
+to build nothing, run no tests and no project code, and start no subagents.
+Sudus cannot enforce this. The harness runs the subagent with its ordinary
+permissions, so the read-only role is an instruction, not isolation. The
 brief lists the receipts, so it knows what already ran. It reads the whole
 specification first and judges the commitment as part of the whole system.
 
@@ -901,7 +911,11 @@ sudus scope <breach-sha> <breach-sha> <breach-sha> keep
 
 Your ok keeps the bytes the breach captured. If the path changed after
 that, keep refuses; the agent puts the captured bytes back, or restores
-the path and asks again about the new bytes as a new breach.
+the path and asks again about the new bytes as a new breach. After a
+supersession, the successor's start writes the roadmap's `Current:` line
+itself, after the breach captured the roadmap; keep and restore read a
+`Current:` line that names the open commitment as that write, not as a
+change to the path.
 
 A later `sudus declare` cannot retroactively clear an existing breach; it
 only legalizes future changes.
@@ -1372,7 +1386,12 @@ older copy of the shim, never another file; no hook writes it. Claude Code and
 Codex read `hooks/hooks.json` (SessionStart, UserPromptSubmit, Stop);
 Muse reads two entries (SessionStart, Stop) from
 `.muse-plugin/plugin.json`. Every hook prints the current wake verdict, in
-one line, at most, beyond that. No hook writes a file, commits, refuses a
+one line, at most, beyond that. The exception is Codex's stop hook: the
+per-turn hook already gives the agent the verdict, so at stop a routine
+verdict prints nothing, and only a version problem or a failed wake is
+shown, as one `systemMessage` object (Codex reads a Stop hook's output
+as JSON). A stop hook registered by hand in Codex takes the argument
+`codex`. No hook writes a file, commits, refuses a
 stop, or counts anything; a harness without hooks relies entirely on the
 working agreement in `AGENTS.md`.
 

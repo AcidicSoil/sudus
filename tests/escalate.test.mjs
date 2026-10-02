@@ -735,3 +735,63 @@ test('a draft that repeats a concern token is refused', () => {
   assert.throws(() => validateDraft(draft({ concerns: ['DEMO-001', `finding:${a}#1`, 'DEMO-001'] })), { message: 'sudus: concern token DEMO-001 is repeated' });
   assert.equal(validateDraft(draft({ concerns: [`finding:${a}#1`, `finding:${a}#2`] })).concerns.length, 2, 'two findings of one record are two tokens');
 });
+
+// Wake calls waitedBy for every backlog item between commitments. It found the ok again for each
+// record before it, a scan of the log each time, so its work grew with the square of the log. The
+// work is counted as reads of each record's kind and sha, which the scans read first.
+test('waitedBy reads the log a bounded number of times, however far the ok sits from the escalation', async () => {
+  const { waitedBy } = await import('../lib/escalate.mjs');
+  let reads = 0;
+  const hex = (n) => n.toString(16).padStart(40, '0');
+  const rec = (sha, kind, payload) => ({ get sha() { reads++; return sha; }, get kind() { reads++; return kind; }, target: '-', payload });
+  const item = rec(hex(1), 'item', { kind: 'backlog', slug: 'later', source: 'DEMO-001', body: 'an idea' });
+  const esc = rec(hex(2), 'escalation', { slug: 'first', concerns: `wait:${hex(1)}` });
+  const filler = Array.from({ length: 500 }, (_, i) => rec(hex(1000 + i), 'receipt', {}));
+  const log = [item, esc, ...filler, rec(hex(3), 'answer', { escalation: hex(2), kind: 'ok' })];
+  reads = 0;
+  assert.equal(waitedBy(log, hex(1)), hex(2));
+  assert.ok(reads < 10 * log.length, `${reads} reads of ${log.length} records`);
+  log.push(rec(hex(4), 'done', { slug: 'first' }));
+  assert.equal(waitedBy(log, hex(1)), null);
+});
+
+// Issue #57: wake asks for every escalation's state and every backlog item's retirement and wait.
+// Asked one at a time, each scanned the log, so the work grew with the escalations times the log.
+// Reads of each record's kind and sha are counted at k and 2k items: one pass per call doubles
+// them, a scan per item quadruples them, whatever the constant.
+test('unanswered and itemHolds read the log in proportion to its length, not its items times its length', async () => {
+  const { unanswered, itemHolds, retiredBy, waitedBy } = await import('../lib/escalate.mjs');
+  let reads = 0;
+  const hex = (n) => n.toString(16).padStart(40, '0');
+  const rec = (sha, kind, payload) => ({ get sha() { reads++; return sha; }, get kind() { reads++; return kind; }, target: '-', payload });
+  // Item i has a retire (even i) or wait (odd i) escalation, answered ok (i % 3 === 1), asked
+  // (i % 3 === 2) or not answered (i % 3 === 0).
+  const build = (k) => {
+    const log = [];
+    for (let i = 0; i < k; i++) {
+      const item = hex(10 * i + 1), esc = hex(10 * i + 2);
+      log.push(rec(item, 'item', { kind: 'backlog', slug: `later-${i}`, source: 'DEMO-001', body: 'an idea' }));
+      log.push(rec(esc, 'escalation', { slug: 'first', concerns: `${i % 2 ? 'wait' : 'retire'}:${item}` }));
+      if (i % 3) log.push(rec(hex(10 * i + 3), 'answer', { escalation: esc, kind: i % 3 === 1 ? 'ok' : 'ask' }));
+    }
+    return log;
+  };
+  const count = (log) => {
+    reads = 0;
+    const open = unanswered(log);
+    const holds = itemHolds(log);
+    const held = log.filter((r) => r.payload.kind === 'backlog').map((r) => [holds.retired(r.sha), holds.waited(r.sha)]);
+    return { reads, open, held };
+  };
+  const small = count(build(100)), large = count(build(200));
+  assert.ok(large.reads < 3 * small.reads, `${small.reads} reads at 100 items, ${large.reads} at 200`);
+  assert.equal(small.open.length, 67, 'every escalation without an ok or instead answer is unanswered');
+  assert.deepEqual(small.open.filter((u) => u.awaiting === 'reply').length, 33, 'an asked escalation awaits a reply');
+  assert.deepEqual(small.held[4], [hex(42), null], 'an ok on retire:<item> retires it');
+  assert.deepEqual(small.held[1], [null, hex(12)], 'an ok on wait:<item> lets it wait');
+  assert.deepEqual(small.held[0], [null, null], 'an unanswered retire escalation retires nothing');
+  assert.deepEqual(small.held[5], [null, null], 'an asked wait escalation lets nothing wait');
+  const log = build(10);
+  assert.equal(retiredBy(log, hex(41)), hex(42));
+  assert.equal(waitedBy(log, hex(11)), hex(12));
+});

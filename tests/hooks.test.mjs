@@ -24,6 +24,8 @@ test("session-start names a missing link and durable refs in one line", () => {
   const line = r.stdout.split("\n").find((l) => l.startsWith("sudus: missing"));
   assert.ok(line, r.stdout);
   for (const s of ["command link ~/.local/bin/sudus", "durable ref refs/sudus/log", "durable ref refs/sudus/snapshots"]) assert.ok(line.includes(s), line);
+  // Issue #41: the items ran together with no separator between them.
+  assert.equal(line, "sudus: missing command link ~/.local/bin/sudus, durable ref refs/sudus/log, durable ref refs/sudus/snapshots");
   assert.equal(r.status, 0);
 });
 
@@ -231,3 +233,108 @@ for (const name of ["session-start.sh", "turn.sh", "stop.sh"]) {
     assert.equal(second, first); assert.ok(first.includes("Resolvable: implement REQ-001"));
   });
 }
+
+// Issue #53: each hook kept its command as one string, `node <plugin path>/bin/sudus.mjs`, and ran
+// it unquoted, so a plugin path holding a space split into several words and node could not find
+// the module. The fallback runs when the sudus found is older than the plugin.
+test("each hook runs the plugin's own copy when its path holds a space (issue #53)", () => {
+  const { dir } = throwawayRepo();
+  const spaced = join(dir, "plugin copy");
+  symlinkSync(ROOT, spaced);
+  const bin = join(dir, "fakebin");
+  fakeSudus(bin, { stdout: "STALE VERDICT", version: "0.0.1" });
+  for (const hook of ["session-start.sh", "turn.sh", "stop.sh"]) {
+    const r = spawnSync("/bin/sh", [join(spaced, "hooks", hook)], { cwd: dir, input: "{}", encoding: "utf8", env: { PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`, HOME: join(dir, "home") } });
+    assert.equal(r.status, 0, hook);
+    assert.doesNotMatch(r.stdout, /MODULE_NOT_FOUND|Cannot find module|wake exited/, `${hook}: ${r.stdout}`);
+    assert.doesNotMatch(r.stdout, /STALE VERDICT/, hook);
+  }
+});
+
+// Issue #61: Codex reads a Stop hook's stdout, when the hook exits 0, as blank or as one JSON
+// object holding only these fields, and fails the hook on anything else ("hook returned invalid
+// stop hook JSON output"); codex-rs/hooks/src/events/stop.rs and schema.rs at rust-v0.159.3.
+// SessionStart and UserPromptSubmit take plain text as context unless it starts like JSON. Codex
+// sets PLUGIN_ROOT for a plugin's hooks; Claude Code sets CLAUDE_PLUGIN_ROOT alone.
+const CODEX_STOP_FIELDS = { continue: "boolean", stopReason: "string", suppressOutput: "boolean", systemMessage: "string", decision: "string", reason: "string" };
+function codexStop(stdout) {
+  if (stdout.trim() === "") return {};
+  const v = JSON.parse(stdout.trim());
+  assert.ok(v !== null && typeof v === "object" && !Array.isArray(v), stdout);
+  for (const [k, x] of Object.entries(v)) assert.equal(typeof x, CODEX_STOP_FIELDS[k], `${k} in ${stdout}`);
+  assert.equal(v.decision, undefined, stdout); assert.notEqual(v.continue, false, stdout);
+  return v;
+}
+const codexEnv = (dir, opts) => {
+  const bin = join(dir, "fakebin");
+  fakeSudus(bin, opts);
+  return { PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`, HOME: join(dir, "home"), PLUGIN_ROOT: ROOT, CLAUDE_PLUGIN_ROOT: ROOT };
+};
+
+// Issue #63: Codex's per-turn hook already gives the agent the verdict, and a systemMessage is
+// shown to the person after every response, so a routine verdict (wake exits 0 or 3) prints
+// nothing at stop; only a version problem or a failed wake reaches the person.
+test("under Codex, a routine verdict prints nothing at stop, which Codex accepts (issue #63)", () => {
+  for (const fake of [
+    { stdout: RESOLVABLE },
+    { stdout: "verdict: Waiting\nparty: developer\nreason: escalation e1 awaits an answer\n" },
+    { stdout: "Done: commitment c1 is finished\n" },
+    { stdout: "sudus: not initialized; run /new-project or /existing-project\n", exit: 3 },
+  ]) {
+    const { dir } = throwawayRepo();
+    const r = runHook("stop.sh", { cwd: dir, env: codexEnv(dir, fake), stdin: JSON.stringify({ hook_event_name: "Stop", turn_id: "t1", stop_hook_active: false }) });
+    assert.equal(r.status, 0); assert.equal(r.stderr, "");
+    assert.equal(r.stdout, "", fake.stdout);
+    assert.deepEqual(codexStop(r.stdout), {});
+  }
+});
+
+test("under Codex, a failed wake reaches the person as one systemMessage Codex accepts, never a block (issues #61, #63)", () => {
+  const { dir } = throwawayRepo();
+  const r = runHook("stop.sh", { cwd: dir, env: codexEnv(dir, { stdout: "sudus: log unreadable\n", exit: 1 }) });
+  assert.equal(r.status, 0); assert.equal(r.stderr, "");
+  assert.deepEqual(codexStop(r.stdout), { systemMessage: "sudus: log unreadable\nsudus: wake exited 1" });
+});
+
+test("a Stop hook registered by hand in Codex passes codex and prints the same way (issues #61, #63)", () => {
+  for (const [fake, want] of [[{ stdout: RESOLVABLE }, {}], [{ stdout: "sudus: log unreadable\n", exit: 1 }, { systemMessage: "sudus: log unreadable\nsudus: wake exited 1" }]]) {
+    const { dir } = throwawayRepo();
+    const { PLUGIN_ROOT, CLAUDE_PLUGIN_ROOT, ...e } = codexEnv(dir, fake);
+    const r = runHook("stop.sh", { cwd: dir, env: e, args: ["codex"] });
+    assert.equal(r.status, 0);
+    assert.deepEqual(codexStop(r.stdout), want);
+  }
+});
+
+test("under Codex, the version-mismatch line reaches the person alone, without the plugin copy's verdict (issues #61, #63)", () => {
+  const { dir } = throwawayRepo();
+  const r = runHook("stop.sh", { cwd: dir, env: codexEnv(dir, { stdout: "STALE VERDICT", version: "0.0.1" }) });
+  assert.equal(r.status, 0);
+  const { systemMessage } = codexStop(r.stdout);
+  assert.match(systemMessage, /^sudus: the sudus command found runs 0\.0\.1, this plugin is [^\n]*chmod \+x ~\/\.local\/bin\/sudus$/);
+});
+
+test("under Codex, the systemMessage keeps quotes, backslashes, control bytes and UTF-8 exactly (issue #61)", () => {
+  const text = 'sudus: say "hi" \\ back\tslash\x01\x1f end\ncaf\u00e9 \u2014 ok\r\nlast';
+  const { dir } = throwawayRepo();
+  const r = runHook("stop.sh", { cwd: dir, env: codexEnv(dir, { stdout: text, exit: 2 }) });
+  assert.equal(r.status, 0);
+  assert.deepEqual(codexStop(r.stdout), { systemMessage: `${text}\nsudus: wake exited 2` });
+});
+
+test("without PLUGIN_ROOT or codex, stop prints the plain lines: CLAUDE_PLUGIN_ROOT alone, as Claude Code sets, is not Codex (issue #61)", () => {
+  const { dir } = throwawayRepo();
+  const { PLUGIN_ROOT, ...e } = codexEnv(dir, { stdout: RESOLVABLE });
+  assert.equal(runHook("stop.sh", { cwd: dir, env: e }).stdout, RESOLVABLE);
+  assert.equal(runHook("stop.sh", { cwd: dir, env: { PATH: e.PATH, HOME: e.HOME } }).stdout, RESOLVABLE);
+});
+
+test("under Codex, session-start and turn print plain text Codex takes as context (issue #61)", () => {
+  for (const name of ["session-start.sh", "turn.sh"]) {
+    const { dir } = throwawayRepo();
+    const r = runHook(name, { cwd: dir, env: codexEnv(dir, { stdout: RESOLVABLE }) });
+    assert.equal(r.status, 0);
+    assert.ok(r.stdout.includes(RESOLVABLE), r.stdout);
+    assert.ok(!/^[{[]/.test(r.stdout.trimStart()), `${name}: ${r.stdout}`);
+  }
+});

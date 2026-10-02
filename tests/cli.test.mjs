@@ -1021,7 +1021,7 @@ describe('the measure brief and the CLI', () => {
   test('sudus measure --brief (review source) writes the intent and prints a launch block', async () => {
     const cwd = await repoWithCommitment(false);
     const r = await run(['measure', '--brief', ...draftFlags(draft())], cwd, { env: { SUDUS_HARNESS: 'claude_code' } });
-    assert.equal(r.code, 0, r.err); assert.match(r.out, /start:.*fresh reviewer/); assert.match(r.out, /sudus measure auth-tokens .* --file/);
+    assert.equal(r.code, 0, r.err); assert.match(r.out, /start:.*fresh reviewer/); assert.match(r.out, /sudus measure auth-tokens --file </);
     // Written records: an evaluation-intent naming the review source and the detected harness --
     // no measurement yet (the review source finishes only through Task 6's --file completion).
     const log = await readLog(cwd);
@@ -1035,6 +1035,19 @@ describe('the measure brief and the CLI', () => {
     assert.match(written, /# Measurement brief/);
     assert.match(written, /## Score five dimensions, 0 to 4 each/);
     assert.match(written, /sudus measure <slug> --file <path>/);
+  });
+  // Issue #40: the launch line put the intent's short sha between the slug and --file, and the
+  // argument check refuses a second positional, so the command as printed never ran.
+  test('the follow-up command the measure launch line prints passes the argument check (issue #40)', async () => {
+    const cwd = await repoWithCommitment(false);
+    const r = await run(['measure', '--brief', ...draftFlags(draft())], cwd, { env: { SUDUS_HARNESS: 'claude_code' } });
+    assert.equal(r.code, 0, r.err);
+    const printed = /run: sudus (.*)$/m.exec(r.out)[1];
+    const answers = join(cwd, 'answers.json');
+    await writeFile(answers, '{}\n');
+    const argv = printed.replace('<path to its answers>', answers).split(' ');
+    const follow = await run(argv, cwd, { env: { SUDUS_HARNESS: 'claude_code' } });
+    assert.doesNotMatch(follow.err, /unknown argument/, follow.err);
   });
   // Fix (Important I3, final-review.md): sudus measure never exposed a --harness <name> override,
   // unlike sudus brief, which section 10 says the review source mirrors exactly. `splitFlag`
@@ -1178,7 +1191,7 @@ describe('the measure brief and the CLI', () => {
       const cwd = await repoWithCommitment(false);
       const briefRun = await run(['measure', '--brief', ...draftFlags(draft())], cwd, { env: { SUDUS_HARNESS: 'claude_code' } });
       assert.equal(briefRun.code, 0, briefRun.err);
-      assert.match(briefRun.out, /sudus measure auth-tokens .* --file/);
+      assert.match(briefRun.out, /sudus measure auth-tokens --file </);
       const briefIntent = (await readLog(cwd)).findLast((x) => x.kind === 'evaluation-intent');
       assert.equal(briefIntent.payload.session, 'sess-agent-cli');
 

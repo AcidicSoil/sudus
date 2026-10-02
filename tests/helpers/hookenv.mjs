@@ -14,6 +14,9 @@ export function throwawayRepo() {
     return r.stdout;
   };
   git("init", "-q", "-b", "main"); git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t");
+  // git commit starts auto maintenance detached, which can create and remove
+  // .git/objects/maintenance.lock while a test fingerprints the repository.
+  git("config", "maintenance.auto", "false");
   writeFileSync(join(dir, "README.md"), "throwaway\n"); git("add", "README.md"); git("commit", "-q", "-m", "first");
   return { dir, git };
 }
@@ -44,8 +47,8 @@ export function fingerprint(dir) {
   return h.digest("hex");
 }
 
-export function runHook(name, { cwd, env = {}, stdin = "{}" }) {
-  const r = spawnSync("sh", [join(ROOT, "hooks", name)], { cwd, input: stdin, encoding: "utf8", env: { HOME: cwd, PATH: "/usr/bin:/bin", ...env } });
+export function runHook(name, { cwd, env = {}, stdin = "{}", args = [] }) {
+  const r = spawnSync("sh", [join(ROOT, "hooks", name), ...args], { cwd, input: stdin, encoding: "utf8", env: { HOME: cwd, PATH: "/usr/bin:/bin", ...env } });
   return { stdout: r.stdout, stderr: r.stderr, status: r.status };
 }
 

@@ -357,3 +357,96 @@ test('finding 11: an existing .sudus/output/.gitignore is not rewritten by check
   await check(repo.cwd, 'DEMO-001');
   assert.equal(await readFile(join(repo.cwd, OUTPUT_DIR, '.gitignore'), 'utf8'), 'custom\n');
 });
+
+// Issue #46: spec item 37 says execution identity holds only non-secret values, but the name
+// screening passes a connection URL such as DATABASE_URL, and its value went into the receipt, a
+// commit on the log that travels to the authority remote, with the password in it.
+test('a declared connection URL or probe output records no password in the receipt, and the receipt stays current (issue #46)', async () => {
+  const { isCurrent } = await import('../lib/check.mjs');
+  const url = 'postgres://review:synthetic-password@example.invalid/db?sslmode=require&password=synthetic-other';
+  const prior = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = url;
+  const p = await declared({ identity: { tools: { probe: 'echo mysql://root:synthetic-probe@db.invalid/app' }, env: ['DATABASE_URL'], image: null } });
+  try {
+    await check(p.cwd, 'DEMO-001');
+    const r = (await readLog(p.cwd)).filter((x) => x.kind === 'receipt').at(-1);
+    assert.equal(r.payload.identity.env.DATABASE_URL, 'postgres://review:[redacted]@example.invalid/db?sslmode=require&password=[redacted]');
+    assert.equal(r.payload.identity.tools.probe, 'mysql://root:[redacted]@db.invalid/app');
+    const body = (await catCommit(p.cwd, r.sha)).body;
+    for (const secret of ['synthetic-password', 'synthetic-other', 'synthetic-probe']) assert.ok(!body.includes(secret), secret);
+    assert.equal(await isCurrent(p.cwd, r, 'DEMO-001'), true);
+  } finally {
+    if (prior === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prior;
+    await p.cleanup();
+  }
+});
+
+// Issue #45: result lines were parsed only from the output kept under the 8 MiB diagnostic cap, so
+// a fail printed after the cap was never read and an earlier pass stood as the result.
+test('a fail printed after the output cap overrides an earlier pass (issue #45)', async () => {
+  const { OUTPUT_CAP, isCurrent } = await import('../lib/check.mjs');
+  const p = await declared();
+  try {
+    await p.write('check.mjs', `console.log('sudus: DEMO-001: pass');\nawait new Promise((resolve, reject) => process.stdout.write('x'.repeat(${OUTPUT_CAP + 65536}) + '\\n', (e) => (e ? reject(e) : resolve())));\nconsole.log('sudus: DEMO-001: fail');\nprocess.exitCode = 1;\n`);
+    await check(p.cwd, 'DEMO-001');
+    const r = (await readLog(p.cwd)).filter((x) => x.kind === 'receipt').at(-1);
+    assert.equal(r.payload.results[0].result, 'fail');
+    assert.match(await readFile(join(p.cwd, '.sudus/output', r.payload.output.slice(7)), 'utf8'), /output truncated/);
+    assert.equal(await isCurrent(p.cwd, r, 'DEMO-001'), true);
+  } finally { await p.cleanup(); }
+});
+
+test('a result line split across writes and ended with CRLF is read (issue #45)', async () => {
+  const p = await declared();
+  try {
+    await p.write('check.mjs', `process.stdout.write('noise\\nsudus: DEMO-');\nawait new Promise((r) => setTimeout(r, 50));\nprocess.stdout.write('001: pa');\nawait new Promise((r) => setTimeout(r, 50));\nprocess.stdout.write('ss\\r\\n');\n`);
+    await check(p.cwd, 'DEMO-001');
+    const r = (await readLog(p.cwd)).filter((x) => x.kind === 'receipt').at(-1);
+    assert.equal(r.payload.results[0].result, 'pass');
+  } finally { await p.cleanup(); }
+});
+
+// Issue #44: check snapshots the inputs, then runs the command in the live workspace. An edit made
+// while the command ran was tested, the snapshot recorded the bytes before it, and once the edit
+// was reverted the pass stood current for bytes the command never saw.
+test('an input changed while the command runs leaves every result unverified, never a pass for untested bytes (issue #44)', async () => {
+  const { isCurrent, CHANGED_DURING_RUN } = await import('../lib/check.mjs');
+  const { access: exists } = await import('node:fs/promises');
+  const p = await declared();
+  try {
+    await p.write('hello.txt', 'broken\n');
+    await p.write('check.mjs', `import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+writeFileSync('.sudus/output/check-started', '1');
+for (let i = 0; i < 500 && !existsSync('.sudus/output/check-go'); i++) await new Promise((r) => setTimeout(r, 10));
+const ok = readFileSync('hello.txt', 'utf8').trim() === 'hello';
+console.log('sudus: DEMO-001: ' + (ok ? 'pass' : 'fail'));
+console.log('sudus: DEMO-002: pass');
+`);
+    await p.write('.sudus/output/fixture-marker', '');   // the checker writes its barrier file there
+    const pending = check(p.cwd, 'DEMO-001');
+    let started = false;
+    for (let i = 0; i < 400 && !started; i++) { try { await exists(join(p.cwd, '.sudus/output/check-started')); started = true; } catch { await new Promise((r) => setTimeout(r, 10)); } }
+    assert.ok(started, 'the checker reached its barrier');
+    await p.write('hello.txt', 'hello\n');
+    await p.write('.sudus/output/check-go', '1');
+    await pending;
+    const r = (await readLog(p.cwd)).filter((x) => x.kind === 'receipt').at(-1);
+    assert.deepEqual(r.payload.results.map((x) => [x.requirement, x.result]), [['DEMO-001', 'unverified']]);   // DEMO-002 is not Agreed in the fixture
+    assert.ok((await readFile(join(p.cwd, '.sudus/output', r.payload.output.slice(7)), 'utf8')).includes(CHANGED_DURING_RUN));
+    await p.write('hello.txt', 'broken\n');
+    assert.equal(await isCurrent(p.cwd, r, 'DEMO-001'), true, 'the snapshot still matches the reverted bytes');
+    assert.notEqual(r.payload.results[0].result, 'pass');
+  } finally { await p.cleanup(); }
+});
+
+// Review of 4.2.7 (Codex): the stream scanner kept every requirement id it saw, so a command that
+// printed result lines for many undeclared ids grew memory past the output cap, and identity probes
+// scanned output they never use. Only the declared ids are recorded, and probes record none.
+test('runCommand records results only for the ids it is asked about, and none by default (issue #45 follow-up)', async () => {
+  const { runCommand } = await import('../lib/check.mjs');
+  const cmd = `node -e "for (let i = 0; i < 2000; i++) console.log('sudus: X-' + String(i).padStart(4, '0') + ': pass'); console.log('sudus: DEMO-001: fail')"`;
+  const asked = await runCommand(process.cwd(), cmd, { results: ['DEMO-001', 'DEMO-002'] });
+  assert.deepEqual([...asked.seen.keys()], ['DEMO-001']);
+  assert.deepEqual(asked.seen.get('DEMO-001'), { pass: false, fail: true });
+  assert.equal((await runCommand(process.cwd(), cmd)).seen.size, 0);
+});

@@ -61,6 +61,17 @@ test('a lease covers a path through its target requirement or its touch list', (
   assert.ok(leaseCovers({ action: 'build-decision', target: '01J', touch: ['lib/x.mjs'] }, mechs, 'lib/x.mjs'));
   assert.ok(!leaseCovers({ action: 'build-decision', target: '01J', touch: [] }, mechs, 'lib/x.mjs'));
 });
+// Issue #39: a lease on the open commitment's slug (resolve SLUG, for a finding) covers the inputs
+// of every mechanism the commitment's requirements name, and nothing outside them.
+test('a lease on the open commitment slug covers the inputs of the mechanisms its requirements name (issue #39)', () => {
+  const lease = { action: 'resolve', target: 'first', touch: [] };
+  const open = { slug: 'first', requirements: ['DEMO-001'] };
+  assert.ok(leaseCovers(lease, mechs, 'src/demo.mjs', open));
+  assert.ok(!leaseCovers(lease, mechs, 'lib/x.mjs', open));
+  assert.ok(leaseCovers(lease, mechs, 'lib/x.mjs', { slug: 'first', requirements: ['DEMO-001', 'DEMO-002'] }));
+  assert.ok(!leaseCovers(lease, mechs, 'src/demo.mjs', { slug: 'second', requirements: ['DEMO-001'] }));
+  assert.ok(!leaseCovers(lease, mechs, 'src/demo.mjs'));
+});
 
 test('the declaration-set digest changes when a definition digest changes', () => {
   const a = declarationSetDigest(mechs);
@@ -697,4 +708,98 @@ test('sudus scope <breach>... keep disposes every breach the one ok covers, one 
   const one = sudus(r.cwd, 'scope', shas[0]);
   assert.equal(one.status, 1);
   assert.match(one.stderr, /^sudus: usage: sudus scope <breach-sha or path>\.\.\. keep\|restore/);
+});
+
+// Issue #51: workspaceDelta sent a path holding a newline to hash-object --stdin-paths, which read
+// it as two paths and failed; the other hashing sites already hashed such a path on its own.
+test('workspaceDelta reads an unchanged path holding a newline or a leading quote as unchanged (issue #51)', async () => {
+  const { makeRepo } = await import('./helpers/repo.mjs');
+  const { writeTreeFromPaths } = await import('../lib/gitx.mjs');
+  const repo = await makeRepo();
+  try {
+    const paths = ['source\nvariant.txt', '"quoted".txt', 'plain.txt'];
+    for (const p of paths) await repo.write(p, 'content\n');
+    await repo.git('add', '-A'); await repo.git('commit', '-q', '-m', 'paths');
+    assert.deepEqual(await workspaceDelta(repo.dir, await writeTreeFromPaths(repo.dir, { paths })), []);
+    await repo.write('source\nvariant.txt', 'changed\n');
+    assert.deepEqual((await workspaceDelta(repo.dir, await writeTreeFromPaths(repo.dir, { paths: ['plain.txt', '"quoted".txt'] }))).map((d) => [d.path, d.change]), [['source\nvariant.txt', 'added']]);
+  } finally { await repo.remove(); }
+});
+
+// Issue #62: the preflight before `sudus supersede` captured the roadmap's breach naming the
+// superseded commitment as Current:, and the successor's start then rewrote that line, so neither
+// keep (against the captured bytes) nor restore (against the allowed base) could ever match, and
+// wake named `scope docs/spec/roadmap.md` for good. Driven through the CLI, as the issue ran it.
+import { buildProject, MECH_DEFINITION, ROOT as FIXTURE_ROOT } from './helpers/fixture.mjs';
+import { wake } from '../lib/wake.mjs';
+
+const SUCCESSOR = '\n## fixture-b\n\nRequirements: REQ-001 REQ-002\n\nDelivers add over finite numbers.\n';
+// fixture open; under it the roadmap gains fixture-b's section, or, with the section already in
+// the base, fixture's own text is edited; then supersede, authorize and start fixture-b.
+async function supersededRoadmap({ sectionInBase = false } = {}) {
+  const p = buildProject();
+  const text = (f) => readFile(join(p.dir, f), 'utf8');
+  await p.developer.init();
+  p.write('docs/spec/add.md', (await text('docs/spec/add.md')).replaceAll('Status: Draft', 'Status: Agreed 2026-09-19'));
+  if (sectionInBase) p.write('docs/spec/roadmap.md', (await text('docs/spec/roadmap.md')) + SUCCESSOR);
+  p.commit('Agree the two requirements');
+  p.sudus(['declare', 'tests', '--file', p.outFile('mech-tests.json', MECH_DEFINITION)]);
+  p.commit('Declare the tests mechanism');
+  const receipt = p.sudus(['check', 'REQ-001']).stdout.trim().split(' ')[1];
+  p.sudus(['review', 'mechanism', 'REQ-001', receipt]); p.sudus(['review', 'mechanism', 'REQ-002', receipt]);
+  p.commit('Bind the mechanism review');
+  p.write('AGENTS.md', await readFile(join(FIXTURE_ROOT, 'skills/new-project/templates/AGENTS.md'), 'utf8'));
+  p.commit('Add the working agreement');
+  await p.developer.authorize();
+  p.sudus(['start', 'fixture']);
+  const roadmap = await text('docs/spec/roadmap.md');
+  p.write('docs/spec/roadmap.md', sectionInBase ? roadmap.replace('Delivers add.', 'Delivers add, faster.') : roadmap + SUCCESSOR);
+  p.commit('Edit the roadmap under fixture');
+  p.sudus(['supersede', 'fixture-b', '--quote', 'Developer: supersede fixture with fixture-b.']);
+  p.sudus(['authorize', '--quote', 'ok']);
+  p.sudus(['start', 'fixture-b']);
+  assert.match(await text('docs/spec/roadmap.md'), /^Current: fixture-b$/m);
+  const breach = (await p.readLog()).find((r) => r.kind === 'scope-breach' && r.payload.path === 'docs/spec/roadmap.md');
+  assert.ok(breach, 'the preflight before supersede records the roadmap breach');
+  const okKeep = async () => {
+    p.sudus(['escalate', '--commitment', 'fixture-b', '--concern', `breach:${breach.sha}`, '--question', 'Keep the roadmap edit?', '--recommendation', 'keep', '--because', 'the developer made it', '--if-wrong', 'restore it', '--instead', 'restore']);
+    await p.developer.answer('fixture-b', 'ok', 'ok');
+  };
+  return { p, text, breach, okKeep };
+}
+
+test('after a supersession, keep takes the roadmap whose only change since the capture is the Current: line the start wrote (issue #62)', async () => {
+  const { p, breach, okKeep } = await supersededRoadmap();
+  await okKeep();
+  p.sudus(['scope', breach.sha, 'keep']);
+  assert.deepEqual(openBreaches(await p.readLog()), []);
+  p.sudus(['check', 'REQ-001']);   // the next preflight finds nothing new on the roadmap
+  assert.deepEqual(openBreaches(await p.readLog()), []);
+  assert.notEqual((await wake(p.dir)).action, 'scope');
+});
+
+test('after a supersession, keep still refuses a roadmap that differs beyond that line or names another commitment (issue #62)', async () => {
+  const { p, text, breach, okKeep } = await supersededRoadmap();
+  await okKeep();
+  const now = await text('docs/spec/roadmap.md');
+  for (const changed of [now + '\nA line added after the ok.\n', now.replace('Current: fixture-b', 'Current: elsewhere')]) {
+    p.write('docs/spec/roadmap.md', changed);
+    const r = p.sudus(['scope', breach.sha, 'keep'], { expectExit: 1 });
+    assert.match(r.stdout + r.stderr, /docs\/spec\/roadmap\.md differs from the bytes breach/);
+  }
+  p.write('docs/spec/roadmap.md', now);
+  p.sudus(['scope', breach.sha, 'keep']);
+  assert.deepEqual(openBreaches(await p.readLog()), []);
+});
+
+test('after a supersession, restore takes the roadmap put back to its allowed base apart from the Current: line the start wrote (issue #62)', async () => {
+  const { p, text, breach } = await supersededRoadmap({ sectionInBase: true });
+  const r = p.sudus(['scope', breach.sha, 'restore'], { expectExit: 1 });
+  assert.match(r.stdout + r.stderr, /docs\/spec\/roadmap\.md still differs from its allowed base/);
+  p.write('docs/spec/roadmap.md', (await text('docs/spec/roadmap.md')).replace('Delivers add, faster.', 'Delivers add.'));
+  p.sudus(['scope', breach.sha, 'restore']);
+  assert.deepEqual(openBreaches(await p.readLog()), []);
+  p.sudus(['check', 'REQ-001']);
+  assert.deepEqual(openBreaches(await p.readLog()), []);
+  assert.match(await text('docs/spec/roadmap.md'), /^Current: fixture-b$/m);
 });

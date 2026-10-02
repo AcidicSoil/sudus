@@ -7,6 +7,67 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.13 - 2026-10-02
+
+- Under Codex the stop hook no longer shows the wake verdict after every response (issue #63). Since 4.2.11 it sent the whole block (verdict, action, reason, predicate) as Codex's `systemMessage`, which Codex shows to you, while the per-turn hook already gives the agent the verdict. A routine verdict, or a project that is not initialized, now prints nothing at stop. The `systemMessage` carries only what needs you: the version-mismatch or pin line, or a wake that failed with its output. Without `PLUGIN_ROOT` (Claude Code) the stop hook prints as before.
+
+## 4.2.12 - 2026-10-01
+
+- After a supersession, a roadmap breach can be kept or restored (issue #62). The breach captured the roadmap before the successor's start rewrote its `Current:` line, so keep refused even with the developer's ok, restore refused too, and wake named `scope docs/spec/roadmap.md` indefinitely. Keep and restore now read a `Current:` line naming the open commitment as the start's own write. Any other difference still refuses: other bytes, a mode change, or `Current:` naming another commitment.
+- The hook tests turn off git's auto maintenance in the throwaway repositories they build. Its lock file appeared and vanished after a commit and could fall between two fingerprints, failing a test that no hook had changed.
+
+## 4.2.11 - 2026-10-01
+
+- Under Codex the stop hook prints one JSON object (issue #61). Codex reads a Stop hook's output as JSON and failed every stop with "hook returned invalid stop hook JSON output". Where Codex runs the plugin's hooks, it sets `PLUGIN_ROOT`, and the stop hook then prints the same lines, including the version-mismatch and "wake exited" lines, as one `{"systemMessage": ...}` object. Codex shows it to you, and it never blocks the stop. A stop hook registered by hand in Codex takes the argument `codex`. Without `PLUGIN_ROOT` (Claude Code sets only `CLAUDE_PLUGIN_ROOT`) the hook prints as before, and `hooks/hooks.json` is unchanged, so Codex does not ask you to trust the hooks again.
+
+## 4.2.10 - 2026-09-30
+
+- Wake reads the log once per check, not once per escalation, finding, backlog item or defect (issue #57). The checks for open escalations, open findings, waiting and promotable backlog items, captured items, fixed defects and the Waiting verdict's list each scanned the whole log for every thing they asked about, so their work grew with that number times the log's length. On reactive-tui's log grown 16 times with its work (38,624 records), they take 24 ms instead of 1,309 ms; at its 2,414 records today, 1 ms instead of 7. Every answer is unchanged: compared with 4.2.9 at every prefix of five project logs and eleven scenario logs, 356,978 comparisons agreed. `sudus show items` reads the log the same way.
+
+## 4.2.9 - 2026-09-30
+
+- Wake between commitments finds the ok on a backlog item's wait escalation once (found while evaluating issue #57). It was found again for every record before it, each time a scan of the log, so the promote check and the Done listing grew with the square of the log's length: on a 2,375-record log, three waiting items cost 202 ms per wake, and 3,082 ms at four times the length. They now cost 0 to 2 ms at those sizes.
+
+## 4.2.8 - 2026-09-30
+
+- The TypeSafe response body is read against a 1 MiB budget (issue #56). A `Content-Length` over it is refused before any byte is read, and the body is cancelled; a stream is cancelled once its count passes the budget. An oversized response is the `toolarge` failure, which a measurement records as unavailable.
+- The result scanner added in 4.2.7 records results only for the requirements being checked, so a command printing lines for other ids cannot grow memory past the output cap, and identity probes record none (found in a review of 4.2.7).
+- Tests hold the shared Git rules together: one set of awkward names (tab, newline, quote, non-ASCII, file and directory prefixes, an executable, a symlink) reads alike through the tree builders, `listTree`, `workspaceDelta` and touch comparison. The check lock and the transaction lock refuse a lock that keeps vanishing the same way, naming a symlink when there is one (issue #58).
+- The README and manual keep three guarantees apart: an attested record is the agent's quote of your words, a signature shows only that whoever holds the private key signed, and the adversary's read-only role is an instruction that no supported harness enforces (issue #60).
+
+## 4.2.7 - 2026-09-30
+
+- A check whose declared inputs, requirement text or mechanism definition change while its command runs records every result as unverified, and says why (issue #44). The command runs in the live workspace, so an edit made during the run was tested while the receipt held the bytes from before it, and once the edit was reverted the pass stood current for bytes the command never saw. An edit made and reverted within the run is still not seen; running on a fixed copy of the inputs would close that, and is a larger change.
+- A `fail` printed after the 8 MiB output cap still overrides an earlier `pass` (issue #45). Result lines are now read as the output streams, not from the capped copy kept for diagnosis.
+- Execution identities record no password from a connection URL or a probe's output (issue #46). The password in a URL's userinfo and the value of a password- or token-named query parameter are recorded as `[redacted]`, and the spec's identity paragraph says so.
+- The calibration bound holds for large samples (issue #47). The binomial terms are summed in the log domain; 2000 errors in 20000 had given a bound of 0.037 instead of 0.104.
+- A dangling symlink at `sudus-check.lock` is a bounded refusal naming it, not an endless retry (issue #48).
+- The read-only tree identity sorts entries by bytes, as Git does, so an unchanged input with names such as a private-use character and an emoji no longer looks stale (issue #49).
+- `listTree` keeps a path that holds a tab whole (issue #50), and the lease's touch comparison reads `ls-tree -z` too.
+- Scope comparison no longer fails on a path that holds a newline (issue #51). Snapshot, scope and lease hashing share one rule for which paths can be batched.
+- A brief runs a shared mechanism's input hashing and tool probes once, not once per requirement (issue #52).
+- The session-start, turn and stop hooks run Sudus when its path holds a space (issue #53).
+- A `.gitattributes` clean filter no longer makes an untouched `--touch` file read as changed (issue #54); touch hashing uses raw bytes, as snapshots do.
+
+## 4.2.6 - 2026-09-29
+
+- In a repository never initialized for Sudus, wake names the skills that continue (issue #41). With no settings file it exited 3 naming a bare `sudus init`, which refuses without `--remote` or `--local-only`, a choice the new-project and existing-project skills ask the developer to make. It now prints `sudus: not initialized; run /new-project or /existing-project`. The session-start hook's missing line separates its items with commas.
+- A lease on a requirement outside the open commitment is named stale when the requirement's prefix holds a digit, such as `E2E-001` (issue #42). The stale-lease check matched only letters before the dash, so such a lease was never named `reconcile`, and while it was held its target's inputs were exempt from `record` and `commit`. The check now uses the requirement grammar's own identifier pattern.
+- The work-loop diagram, `docs/diagrams/work-loop.dot` and its SVG, lists the `supersede` and `fold` actions in precedence order (issue #43). A test compares the diagram's action rows with wake's order.
+
+## 4.2.5 - 2026-09-29
+
+- A resolve lease on the open commitment's slug covers the files a fix changes (issue #39). After the report wake names `resolve SLUG N`, and the lease for the fix is `sudus begin resolve SLUG`. A lease covered only the inputs of the mechanisms that declare its target, and no mechanism declares a slug, so every file the fix changed was named `commit`. A lease on the open commitment's slug now covers the inputs of every mechanism the commitment's requirements name, and the manual's lease section says so.
+- The follow-up command at the end of the `sudus measure --brief` launch block runs as printed (issue #40). It put the intent's short sha between the slug and `--file`, and `sudus measure` refuses a second argument there. The line is now `sudus measure <slug> --file <path to its answers>`.
+
+## 4.2.4 - 2026-09-28
+
+- A lease taken between commitments no longer reads as stale (issue #38). Preparing the next commitment under leases, as the working agreement's `record PATH` move asks, named `reconcile` for every lease because the last commitment was closed, and the fourth begin, commit and end wrote a cycle escalation that neither `instead` option could answer. `sudus begin` now records the done or superseded record that closed the last commitment, and wake treats a lease taken after it as preparation for the next start: only an ended session makes it stale. A lease the finished commitment left behind is still named `reconcile`, and so is a lease 4.2.3 took between commitments, which lacks that record; ending it is enough.
+
+## 4.2.3 - 2026-09-27
+
+- `sudus decide`, `answer`, `realize` and `decisions --read` append to `docs/decisions.jsonl` after it holds a multi-byte character (issue #37). The check on the file's new lines cut them from the decoded text at the old file's length in bytes, so after a character such as an ellipsis the cut started inside the new line, and every later append was refused as a scope violation. The check now cuts the new lines from the bytes. A project stuck on this appends again once it runs 4.2.3.
+
 ## 4.2.2 - 2026-09-27
 
 - The `view` option no longer carries an `options` list, a key the plugin directory's validator does not accept yet. Its description names the four values, and any other value still reads as `off`. In `/config` the setting is now a text field.

@@ -686,3 +686,37 @@ test('the brief lists the network_exclude and credential paths and patterns the 
   for (const s of ['pattern fixtures/private/**', 'network_exclude fixtures/private/k.json', 'credential server.pem']) assert.ok(section.includes(s), s);
   assert.equal(b.text.includes('"secret"'), false);
 });
+
+// Issue #52: receiptLines called currentReceipt once per requirement with no shared memo, so
+// requirements sharing one mechanism re-ran its input hashing and tool probes for each of them.
+test('a brief runs a shared mechanism identity probe once, not once per requirement (issue #52)', async () => {
+  const { declared } = await import('./helpers/mechanism-fixture.mjs');
+  const { appendRecord } = await import('../lib/records.mjs');
+  const { writeWorkspaceSnapshot } = await import('../lib/snapshots.mjs');
+  const { requirementDigest } = await import('../lib/mechanisms.mjs');
+  const { check } = await import('../lib/check.mjs');
+  const { review: recordReview, brief: writeBrief } = await import('../lib/review.mjs');
+  const { readFile: rf } = await import('node:fs/promises');
+  const reqs = ['DEMO-001', 'DEMO-002', 'DEMO-003'];
+  const p = await declared({ requirements: reqs, identity: { tools: { probe: `node -e "require('fs').appendFileSync('.sudus/output/probe-count','x');console.log('v1')"` }, env: [], image: null } });
+  try {
+    await p.write('docs/spec/demo.md', 'Prefix: DEMO\n\n' + reqs.map((r) => `[${r}] Print hello.\nFalsifier: prints something else.\nMechanism: greeter\nStatus: Agreed 2026-09-19\n`).join('\n'));
+    await p.write('docs/spec/roadmap.md', `Current: first\n\n## first\nRequirements: ${reqs.join(' ')}\n`);
+    await p.write('check.mjs', reqs.map((r) => `console.log('sudus: ${r}: pass');`).join('\n'));
+    await p.write('.sudus/output/probe-count', '');
+    await p.commit('three requirements, one mechanism');
+    const requirements = [];
+    for (const requirement of reqs) requirements.push({ requirement, text_digest: (await requirementDigest(p.cwd, requirement)).textDigest });
+    await appendRecord(p.cwd, 'start', 'first', { slug: 'first', snapshot: await writeWorkspaceSnapshot(p.cwd), from_superseded: null, intent: null, results: [], requirements });
+    await check(p.cwd, reqs[0]);
+    const answers = [
+      ...['Q1', 'Q2'].map((question) => ({ question, target: 'greeter', status: 'not-checked', text: '' })),
+      ...reqs.flatMap((target) => ['Q3', 'Q4'].map((question) => ({ question, target, status: 'not-checked', text: '' }))),
+      ...['Q5', 'Q6'].map((question) => ({ question, target: 'first', status: 'not-checked', text: '' })),
+    ];
+    await recordReview(p.cwd, 'first', { examined: ['hello.txt'], answers, findings: [] }, { env: {} });
+    await p.write('.sudus/output/probe-count', '');
+    await writeBrief(p.cwd, 'first', { harness: 'codex', env: {} });
+    assert.equal((await rf(`${p.cwd}/.sudus/output/probe-count`, 'utf8')).length, 1);
+  } finally { await p.cleanup(); }
+});
