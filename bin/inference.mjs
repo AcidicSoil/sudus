@@ -77,7 +77,11 @@ const object = (n) => n !== null && typeof n === 'object' && !Array.isArray(n);
 // Bound the bytes actually read, not only the size after buffering a potentially huge body.
 async function readBounded(response, cap) {
   const claimed = response.headers?.get?.('content-length');
-  if (claimed !== null && claimed !== undefined && /^\d+$/.test(claimed) && Number(claimed) > cap) invalid('response_oversize');
+  if (claimed !== null && claimed !== undefined && /^\d+$/.test(claimed) && Number(claimed) > cap) {
+    // A refused response must not hold its connection open, even when no bytes were consumed.
+    try { await response.body?.cancel?.(); } catch { /* Refusal wins over cancellation errors. */ }
+    invalid('response_oversize');
+  }
   if (response.body && typeof response.body[Symbol.asyncIterator] === 'function') {
     const chunks = []; let total = 0;
     for await (const part of response.body) {

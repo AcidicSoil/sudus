@@ -232,3 +232,19 @@ test('streams and bounds successful responses before accepting the full body', a
     text: async () => { throw new Error('unbounded text()'); } }))), 'response_oversize');
   assert.ok(chunks <= 2);
 });
+
+test('oversized Content-Length cancels the refused response stream before reading bytes', async () => {
+  const track = { read: 0, cancelled: false };
+  const stream = new ReadableStream({
+    pull() { track.read++; throw new Error('must not read a refused stream'); },
+    cancel() { track.cancelled = true; },
+  }, { highWaterMark: 0 });
+  await rejects(post(request(), opts(async () => ({
+    status: 200,
+    headers: { get: (name) => name === 'content-length' ? '99999999' : null },
+    body: stream,
+    text: async () => { throw new Error('must not buffer a refused stream'); },
+  }))), 'response_oversize');
+  assert.equal(track.read, 0);
+  assert.equal(track.cancelled, true, 'release the HTTP stream after rejecting its length');
+});
