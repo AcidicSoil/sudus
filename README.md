@@ -336,9 +336,11 @@ its version, it uses the
 plugin's copy and prints the one command that installs the shim. No hook
 creates the link, refuses a stop, counts anything, or writes a record; a
 hook only prints, and a harness without hooks relies on the working
-agreement in `AGENTS.md`. Codex reads a Stop hook's output as JSON, so
-under Codex the stop hook prints the same lines as one `systemMessage`
-object, which Codex shows and which never blocks the stop.
+agreement in `AGENTS.md`. Under Codex the per-turn hook already gives
+the agent the verdict, so the stop hook prints nothing for a routine
+verdict. It shows you only what needs you, a version problem or a wake
+that failed, as one `systemMessage` object, the JSON Codex reads at
+Stop; it never blocks the stop.
 Make sure `$HOME/.local/bin` is on your `PATH`:
 
 ```sh

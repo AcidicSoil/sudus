@@ -30,13 +30,17 @@ lines() {
     exe=
   fi
   out=$(run wake 2>&1); code=$?
-  printf '%s\n' "$out"
-  [ "$code" -eq 0 ] || [ "$code" -eq 3 ] || printf 'sudus: wake exited %s\n' "$code"
+  if [ "$code" -eq 0 ] || [ "$code" -eq 3 ]; then [ "${1:-}" = codex ] || printf '%s\n' "$out"
+  else printf '%s\nsudus: wake exited %s\n' "$out" "$code"; fi
 }
 # Issue #61: Codex reads a Stop hook's stdout as JSON and fails the hook on plain text. Codex sets
 # PLUGIN_ROOT for a plugin's hooks, which Claude Code does not (it sets CLAUDE_PLUGIN_ROOT), and a
-# Stop hook registered by hand in Codex passes `codex`. Under Codex the same lines go out as one
+# Stop hook registered by hand in Codex passes `codex`. Under Codex the lines go out as one
 # {"systemMessage": ...} object: Codex shows it to the person, and it never blocks the stop.
+# Issue #63: Codex's per-turn hook already puts the verdict in front of the agent, and a
+# systemMessage showed the whole block to the person after every response. Under Codex a routine
+# verdict (wake exits 0 or 3) prints nothing, which Codex accepts; the person sees only what they
+# must act on: the version line above, or a wake that failed, with its output.
 # Every byte below 32, the backslash and the double quote are escaped; other bytes pass through.
 json() {
   LC_ALL=C awk '
@@ -46,5 +50,5 @@ json() {
       text = (NR > 1 ? text "\\n" : "") s }
     END { if (text != "") printf "{\"systemMessage\":\"%s\"}\n", text }'
 }
-if [ "${1:-}" = codex ] || [ -n "${PLUGIN_ROOT:-}" ]; then lines | json; else lines; fi
+if [ "${1:-}" = codex ] || [ -n "${PLUGIN_ROOT:-}" ]; then lines codex | json; else lines; fi
 exit 0

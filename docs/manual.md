@@ -1244,9 +1244,11 @@ older copy of the shim, never another file; no hook writes it. Claude Code and
 Codex read `hooks/hooks.json` (SessionStart, UserPromptSubmit, Stop);
 Muse reads two entries (SessionStart, Stop) from
 `.muse-plugin/plugin.json`. Every hook prints the current wake verdict, in
-one line, at most, beyond that. Codex reads a Stop hook's output as JSON:
-under Codex the stop hook prints the same lines as one `systemMessage`
-object, and a stop hook registered by hand in Codex takes the argument
+one line, at most, beyond that. The exception is Codex's stop hook: the
+per-turn hook already gives the agent the verdict, so at stop a routine
+verdict prints nothing, and only a version problem or a failed wake is
+shown, as one `systemMessage` object (Codex reads a Stop hook's output
+as JSON). A stop hook registered by hand in Codex takes the argument
 `codex`. No hook writes a file, commits, refuses a
 stop, or counts anything; a harness without hooks relies entirely on the
 working agreement in `AGENTS.md`.
