@@ -5,3 +5,6 @@ node_modules/
 
 __pycache__/
 *.pyc
+
+# Locally downloaded model weights and tokenizers; pinned identities live in code/docs.
+/models/
