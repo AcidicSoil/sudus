@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.13 - 2026-10-02
+
+- Under Codex the stop hook no longer shows the wake verdict after every response (issue #63). Since 4.2.11 it sent the whole block (verdict, action, reason, predicate) as Codex's `systemMessage`, which Codex shows to you, while the per-turn hook already gives the agent the verdict. A routine verdict, or a project that is not initialized, now prints nothing at stop. The `systemMessage` carries only what needs you: the version-mismatch or pin line, or a wake that failed with its output. Without `PLUGIN_ROOT` (Claude Code) the stop hook prints as before.
+
 ## 4.2.12 - 2026-10-01
 
 - After a supersession, a roadmap breach can be kept or restored (issue #62). The breach captured the roadmap before the successor's start rewrote its `Current:` line, so keep refused even with the developer's ok, restore refused too, and wake named `scope docs/spec/roadmap.md` indefinitely. Keep and restore now read a `Current:` line naming the open commitment as the start's own write. Any other difference still refuses: other bytes, a mode change, or `Current:` naming another commitment.
