@@ -55,10 +55,10 @@ export const SPEC_PREDICATE = {
 };
 
 export const SETTINGS = {
-  schema: 1, authority_remote: "origin", outside: ["README.md", "notes/**"], source: ["src/**"], interfaces: [], data: [],
+  schema: 2, authority_remote: "origin", outside: ["README.md", "notes/**"], source: ["src/**"], interfaces: [], data: [],
   network_exclude: ["private/**"], signing_key: null, attribution: "forbidden", developer: "present",
   harness: { claude_code: { adversary_model: "claude-fable-5-1", adversary_transport: "remote" } },
-  typesafeai: { enabled: false, model: "jev-1.13.0", weights: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, agent_ceiling: 0.35, confidence_floors: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, min_calibration_agent_predictions: 60, request_cap_bytes: 48000 },
+  inference: { enabled: false, backend: null, endpoint: null, model: "jev-1.13.0", weights: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, agent_ceiling: 0.35, confidence_floors: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, min_calibration_agent_predictions: 60, request_cap_bytes: 48000 },
 };
 
 export const SPEC = {

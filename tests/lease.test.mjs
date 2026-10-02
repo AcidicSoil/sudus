@@ -25,9 +25,9 @@ import { begin, readLease, LEASE_REF } from '../lib/lease.mjs';
 import { loopRepo } from './helpers/loop.mjs';
 
 // Deviation from the plan text: see tests/tx.test.mjs's SETTINGS note; lib/settings.mjs's
-// validateSettings (plan 02, already committed) requires every typesafeai.* threshold key.
-const SETTINGS = JSON.stringify({ schema: 1, authority_remote: null, outside: [], source: ['src/**'], interfaces: [], data: [],
-  network_exclude: [], signing_key: null, attribution: 'forbidden', developer: 'present', harness: {}, typesafeai: { enabled: false, model: null,
+// validateSettings (plan 02, already committed) requires every inference.* threshold key.
+const SETTINGS = JSON.stringify({ schema: 2, authority_remote: null, outside: [], source: ['src/**'], interfaces: [], data: [],
+  network_exclude: [], signing_key: null, attribution: 'forbidden', developer: 'present', harness: {}, inference: { enabled: false, backend: null, endpoint: null, model: null,
     weights: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, agent_ceiling: 0.35,
     confidence_floors: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 },
     min_calibration_agent_predictions: 60, request_cap_bytes: 48000 } });

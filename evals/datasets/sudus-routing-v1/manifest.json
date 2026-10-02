@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "name": "sudus-routing-v1",
+  "dimensions": [
+    "evidence",
+    "reach",
+    "contract",
+    "surface",
+    "ambiguity"
+  ],
+  "splits": [
+    "development",
+    "calibration",
+    "test",
+    "ood"
+  ],
+  "suites": [
+    "semantic",
+    "runtime_contract"
+  ],
+  "rules": {
+    "family_disjoint_splits": true,
+    "human_gold_splits": [
+      "calibration",
+      "test",
+      "ood"
+    ]
+  }
+}

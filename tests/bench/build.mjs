@@ -28,7 +28,15 @@ function domainFile(reqs) {
     `[${id}] ${reqs[id].text}\nFalsifier: ${reqs[id].falsifier}\nMechanism: ${SCENARIOS.project.mechanism.name}\nStatus: Agreed 2026-09-19`).join('\n\n')}\n`;
 }
 
-export async function buildLedgerProject({ dir } = {}) {
+const LOCAL_CHOICES = Object.freeze({
+  verdict: { model: 'verdict-151m-d2528239', endpoint: 'http://127.0.0.1:8011/v1/systemone' },
+  jeff: { model: 'jeff-gliformer-d0a4e53d', endpoint: 'http://127.0.0.1:8000/v1/systemone' },
+  kev: { model: 'kev-4b-485ace87', endpoint: 'http://127.0.0.1:8008/v1/systemone' },
+});
+
+export async function buildLedgerProject({ dir, backend = 'verdict', model, endpoint } = {}) {
+  const selected = LOCAL_CHOICES[backend];
+  if (!selected) throw new Error(`benchmark backend ${backend} is not supported`);
   const project = SCENARIOS.project;
   const cwd = dir ?? mkdtempSync(join(tmpdir(), 'sudus-bench-'));
   sh(cwd, ['init', '-q', '-b', 'main']);
@@ -38,9 +46,9 @@ export async function buildLedgerProject({ dir } = {}) {
 
   const dims = { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 };
   const settings = {
-    schema: 1, authority_remote: null, outside: ['README.md'], source: ['src/**'], interfaces: [], data: [],
+    schema: 2, authority_remote: null, outside: ['README.md'], source: ['src/**'], interfaces: [], data: [],
     network_exclude: [], signing_key: null, attribution: 'forbidden', developer: 'present', harness: {},
-    typesafeai: { enabled: true, model: 'jev-1.13.0', weights: dims, agent_ceiling: 0.35, confidence_floors: { evidence: 0, reach: 0, contract: 0, surface: 0, ambiguity: 0 },
+    inference: { enabled: true, backend, endpoint: endpoint ?? selected.endpoint, model: model ?? selected.model, weights: dims, agent_ceiling: 0.35, confidence_floors: { evidence: 0, reach: 0, contract: 0, surface: 0, ambiguity: 0 },
       min_calibration_agent_predictions: 60, request_cap_bytes: 48000 },
   };
   write(cwd, '.sudus/settings.json', JSON.stringify(settings, null, 2) + '\n');

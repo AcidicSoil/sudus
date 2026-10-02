@@ -25,13 +25,13 @@ describe('the ledger project builder', () => {
     assert.equal(w.verdict, 'Resolvable');
     assert.equal(w.action, 'run');
   });
-  test('typesafeai is enabled, jev, with the composite-design fields (no mode, no old thresholds)', async () => {
+  test('inference is enabled for pinned Verdict with the composite-design fields (no mode, no old thresholds)', async () => {
     const p = await buildLedgerProject();
     const { settings } = await loadSettings(p.dir);
-    assert.equal(settings.typesafeai.enabled, true);
-    assert.equal(settings.typesafeai.model, 'jev-1.13.0');
-    assert.deepEqual(Object.keys(settings.typesafeai.weights).sort(), ['ambiguity', 'contract', 'evidence', 'reach', 'surface']);
-    assert.equal('mode' in settings.typesafeai, false);
+    assert.equal(settings.inference.enabled, true);
+    assert.equal(settings.inference.model, 'verdict-151m-d2528239');
+    assert.deepEqual(Object.keys(settings.inference.weights).sort(), ['ambiguity', 'contract', 'evidence', 'reach', 'surface']);
+    assert.equal('mode' in settings.inference, false);
     assert.equal(settings.developer, 'present');
   });
   test('the touched paths have a real, non-empty uncommitted diff (so code.diff is not empty)', async () => {
@@ -43,4 +43,18 @@ describe('the ledger project builder', () => {
     const a = await buildLedgerProject(), b = await buildLedgerProject();
     assert.notEqual(a.dir, b.dir);
   });
+});
+
+test('benchmark fixture can explicitly select Jeff or Kev without auto fallback', async () => {
+  const configs = [
+    { backend: 'jeff', model: 'jeff-gliformer-d0a4e53d', endpoint: 'http://127.0.0.1:8000/v1/systemone' },
+    { backend: 'kev', model: 'kev-4b-485ace87', endpoint: 'http://127.0.0.1:8008/v1/systemone' },
+  ];
+  for (const cfg of configs) {
+    const p = await buildLedgerProject(cfg);
+    const { settings } = await loadSettings(p.dir);
+    assert.equal(settings.inference.backend, cfg.backend);
+    assert.equal(settings.inference.model, cfg.model);
+    assert.equal(settings.inference.endpoint, cfg.endpoint);
+  }
 });

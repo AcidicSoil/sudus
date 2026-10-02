@@ -224,7 +224,7 @@ for (const name of ["session-start.sh", "turn.sh", "stop.sh"]) {
   });
   test(`${name} does not call a model: the script names no network file, tool or key`, () => {
     const text = readFileSync(join(ROOT, "hooks", name), "utf8");
-    for (const s of ["typesafeai", "curl", "wget", "fetch(", "TYPESAFEAI_API_KEY", "https://"]) assert.ok(!text.includes(s), `${name} mentions ${s}`);
+    for (const s of ["inference", "curl", "wget", "fetch(", "TYPESAFEAI_API_KEY", "https://"]) assert.ok(!text.includes(s), `${name} mentions ${s}`);
   });
   test(`${name} does not complete an action: wake prints the same verdict before and after`, () => {
     const { dir } = throwawayRepo();

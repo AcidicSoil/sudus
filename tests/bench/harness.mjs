@@ -1,9 +1,7 @@
-// tests/bench/harness.mjs -- the live benchmark harness (plan 18, Task 3). Guarded by
-// assertBenchEnabled: nothing here runs -- no project is built, no process is spawned, no network
-// call is ever attempted -- unless SUDUS_BENCH=1 and TYPESAFEAI_API_KEY are both present. The key
-// itself is read only through spawnSync's env option (bin/typesafeai.mjs reads it from the spawned
-// child's own process.env); this module never reads, prints, logs or writes it anywhere.
+// Local inference benchmark. Historical TypeSafe results remain immutable fixtures.
 import { writeFile, readFile } from 'node:fs/promises';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -12,6 +10,7 @@ import { scoreRun, renderResultsMd } from './scoring.mjs';
 import { readLog } from '../../lib/records.mjs';
 import { loadSettings } from '../../lib/settings.mjs';
 import { policyDigest } from '../../lib/evaluate.mjs';
+import { loadDataset } from '../../lib/evaluator-dataset.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, '..', '..');
@@ -19,34 +18,39 @@ const KERNEL = join(REPO_ROOT, 'bin', 'sudus.mjs');
 const GIT = '/usr/bin/git'; // Global constraint: /usr/bin/git for every git command this file runs itself.
 const SCENARIOS = JSON.parse(await readFile(join(HERE, 'scenarios.json'), 'utf8'));
 
-// Ruling 1: a scenario's measurement can come back 'unavailable' with the transport's own
-// rate-limit class. bin/typesafeai.mjs's classify() maps HTTP 429 and 529 to 'overloaded' (after
-// its own retries -- MAX_RETRIES=2 -- are exhausted); lib/evaluate.mjs's measure() then records
-// that as a measurement with outcome 'unavailable' and reason `unavailable ${e.klass}`, i.e.
-// exactly this string.
-const RATE_LIMIT_REASON = 'unavailable overloaded';
-const RATE_LIMIT_WAIT_MS = 30000;
 
 export class BenchGuardError extends Error {}
 
 export function assertBenchEnabled(env) {
   if (env.SUDUS_BENCH !== '1') throw new BenchGuardError('sudus bench: set SUDUS_BENCH=1 to run the live benchmark (it makes real network calls)');
-  if (!env.TYPESAFEAI_API_KEY || typeof env.TYPESAFEAI_API_KEY !== 'string') throw new BenchGuardError('sudus bench: TYPESAFEAI_API_KEY is not set');
 }
 
-// Harness-env note: each spawned `sudus measure` gets a controlled env containing only PATH (git
-// is spawned by bare name in lib/gitx.mjs, so the child needs PATH to find it), HOME (git may
-// consult it, e.g. a global .gitconfig or a safe.directory check) and TYPESAFEAI_API_KEY
-// (bin/typesafeai.mjs's post() reads it from the child's own process.env) -- never the parent
-// shell's own harness markers (CLAUDECODE, CODEX_HOME, MUSE_SESSION) or anything else, so a run
-// proves the autonomous, unattended CLI path rather than inheriting whatever agent shell launched
-// it. Exported so this allowlist is directly, independently testable.
+// Only forward process execution essentials, never hosted credentials or harness markers.
 export function childEnv(env) {
   const out = {};
   if (env.PATH) out.PATH = env.PATH;
   if (env.HOME) out.HOME = env.HOME;
-  out.TYPESAFEAI_API_KEY = env.TYPESAFEAI_API_KEY;
   return out;
+}
+
+export async function loadBenchmarkScenarios(env, fallback = SCENARIOS.scenarios) {
+  if (!env.SUDUS_BENCH_DATASET) return fallback;
+  const data = await loadDataset(env.SUDUS_BENCH_DATASET);
+  const split = env.SUDUS_BENCH_SPLIT ?? 'development';
+  if (!data.manifest.splits.includes(split)) throw new BenchGuardError(`sudus bench: dataset does not declare split ${split}`);
+  const cases = data.cases.filter((row) => row.suite === 'semantic' && row.split === split);
+  if (cases.length === 0) throw new BenchGuardError(`sudus bench: dataset ${data.manifest.name} has no semantic cases in split ${split}`);
+  return cases.map((row) => ({
+    id: row.id,
+    expect: row.gold.route,
+    category: row.scenario.category,
+    draft: row.scenario.draft,
+    family_id: row.family_id,
+    split: row.split,
+    track: row.track,
+    gold: row.gold,
+    dataset_name: data.manifest.name,
+  }));
 }
 
 function draftArgs(slug, sc) {
@@ -60,12 +64,6 @@ function draftArgs(slug, sc) {
 }
 
 function defaultSpawn(cmd, args, opts) { return spawnSync(cmd, args, opts); }
-function defaultSleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
-
-function isRateLimited(measurement) {
-  return !!measurement && measurement.outcome === 'unavailable' && measurement.reason === RATE_LIMIT_REASON;
-}
-
 // One attempt at one scenario: spawn `sudus measure` for it and read back whatever measurement
 // record landed on the project's log as a result (readLog before/after, same diffing approach the
 // brief's own reference implementation uses).
@@ -79,26 +77,16 @@ async function measureScenarioOnce(project, sc, env, spawnImpl) {
   return { r, measurement };
 }
 
-// One scenario, with Ruling 1's retry: a rate-limited outcome waits 30s and is retried exactly
-// once before being recorded, whatever the retry itself comes back as.
-async function measureScenario(project, sc, env, spawnImpl, sleepImpl) {
-  let { r, measurement } = await measureScenarioOnce(project, sc, env, spawnImpl);
-  if (isRateLimited(measurement?.payload)) {
-    await sleepImpl(RATE_LIMIT_WAIT_MS);
-    ({ r, measurement } = await measureScenarioOnce(project, sc, env, spawnImpl));
-  }
-  if (!measurement) return { id: sc.id, expect: sc.expect, category: sc.category, error: `no measurement record written (exit ${r.status}): ${r.stderr}` };
-  return { id: sc.id, expect: sc.expect, category: sc.category, measurement: measurement.payload };
-}
-
-// Ruling 1: every scenario runs strictly one at a time, never concurrently -- this loop awaits
-// each scenario (including its own rate-limit retry and 30s wait) fully before starting the next,
-// so two scenarios' calls can never interleave. Exported separately from runBenchmark so the dry
-// loop test can prove sequential order and the retry with a fake spawnImpl, without also
-// exercising runBenchmark's own results.json/results.md file-writing side effect.
-export async function runScenarios(project, scenarios, env, { spawnImpl = defaultSpawn, sleepImpl = defaultSleep } = {}) {
+// One attempt per scenario. A recorded unavailable result is never silently retried.
+export async function runScenarios(project, scenarios, env, { spawnImpl = defaultSpawn } = {}) {
   const rows = [];
-  for (const sc of scenarios) rows.push(await measureScenario(project, sc, env, spawnImpl, sleepImpl));
+  for (const sc of scenarios) {
+    const { r, measurement } = await measureScenarioOnce(project, sc, env, spawnImpl);
+    const base = { id: sc.id, expect: sc.expect, category: sc.category };
+    for (const key of ['family_id', 'split', 'track', 'gold', 'dataset_name']) if (sc[key] !== undefined) base[key] = sc[key];
+    rows.push(measurement ? { ...base, measurement: measurement.payload }
+      : { ...base, error: `no measurement record written (exit ${r.status}): ${r.stderr}` });
+  }
   return rows;
 }
 
@@ -113,34 +101,34 @@ function sudusHeadSha() {
 // judge a run (which kernel commit produced it, under which policy) before committing it. Pure
 // function of its inputs, exported for a direct test independent of any I/O.
 export function buildMeta({ settings, started, finished, sudusHead, scenarioCount, usableCount, projectDir }) {
-  const t = settings.typesafeai;
+  const t = settings.inference;
   return {
-    model: t.model, agent_ceiling: t.agent_ceiling, confidence_floors: t.confidence_floors, weights: t.weights,
+    backend: t.backend, model: t.model, agent_ceiling: t.agent_ceiling, confidence_floors: t.confidence_floors, weights: t.weights,
     policy_digest: policyDigest(settings), started, finished, sudus_head: sudusHead,
     scenario_count: scenarioCount, usable_count: usableCount, project_dir: projectDir,
   };
 }
 
-// scenarios/spawnImpl/sleepImpl/buildImpl/outDir are additional, optional test seams (all
-// default to the real 24-scenario set, the real spawnSync, a real 30s sleep, the real
-// buildLedgerProject, and this file's own directory) -- runBenchmark({env}) with no other options
-// is exactly the brief's documented call shape and writes exactly tests/bench/results.json and
-// tests/bench/results.md. buildImpl exists so a test can prove the guard runs before building
-// anything, the same way spawnImpl already proves it runs before spawning anything (Minor M2,
-// final-review.md: the guard-order test previously asserted a `built` flag no fake ever set).
-export async function runBenchmark({ env = process.env, scenarios = SCENARIOS.scenarios, spawnImpl = defaultSpawn, sleepImpl = defaultSleep, buildImpl = buildLedgerProject, outDir = HERE } = {}) {
+// Explicit benchmark source, local-only. Default reports go to a temporary directory
+// rather than overwrite the immutable historical Jev benchmark receipts.
+export async function runBenchmark({ env = process.env, scenarios = null, spawnImpl = defaultSpawn, buildImpl = buildLedgerProject, outDir = null } = {}) {
   assertBenchEnabled(env);
-  const started = new Date().toISOString();
-  const project = await buildImpl();
+  const selectedScenarios = scenarios ?? await loadBenchmarkScenarios(env);
+  const startedWallMs = Date.now();
+  const startedMonotonicMs = performance.now();
+  const started = new Date(startedWallMs).toISOString();
+  const project = await buildImpl({ backend: env.SUDUS_BENCH_BACKEND ?? 'verdict',
+    model: env.SUDUS_BENCH_MODEL, endpoint: env.SUDUS_BENCH_ENDPOINT });
   const { settings } = await loadSettings(project.dir);
-  const rows = await runScenarios(project, scenarios, env, { spawnImpl, sleepImpl });
-  const finished = new Date().toISOString();
-  const usable = rows.filter((r) => r.measurement);
-  const scored = scoreRun(usable);
-  const meta = buildMeta({ settings, started, finished, sudusHead: sudusHeadSha(), scenarioCount: scenarios.length, usableCount: usable.length, projectDir: project.dir });
-  await writeFile(join(outDir, 'results.json'), JSON.stringify({ meta, rows }, null, 2) + '\n');
-  await writeFile(join(outDir, 'results.md'), renderResultsMd({ meta, rows: usable, scored }));
-  return { meta, rows, scored };
+  const rows = await runScenarios(project, selectedScenarios, env, { spawnImpl });
+  const finished = new Date(startedWallMs + Math.max(0, performance.now() - startedMonotonicMs)).toISOString();
+  const measured = rows.filter((r) => r.measurement);
+  const scored = scoreRun(measured);
+  const meta = buildMeta({ settings, started, finished, sudusHead: sudusHeadSha(), scenarioCount: selectedScenarios.length, usableCount: scored.overall.total, projectDir: project.dir });
+  const outputDir = outDir ?? mkdtempSync(join(tmpdir(), 'sudus-bench-results-'));
+  await writeFile(join(outputDir, 'results.json'), JSON.stringify({ meta, rows }, null, 2) + '\n');
+  await writeFile(join(outputDir, 'results.md'), renderResultsMd({ meta, rows: measured, scored }));
+  return { meta, rows, scored, outputDir };
 }
 
 // `node tests/bench/harness.mjs` (and `npm run bench`) runs the live benchmark directly. Node has
@@ -148,6 +136,6 @@ export async function runBenchmark({ env = process.env, scenarios = SCENARIOS.sc
 // scripts/cutlist.mjs already use (already committed, so already proven correct on this Node
 // version).
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runBenchmark().then((r) => { console.log(`wrote tests/bench/results.md: ${r.scored.overall.correct}/${r.scored.overall.total}`); })
+  runBenchmark().then((r) => { console.log(`wrote ${r.outputDir}/results.md: ${r.scored.overall.correct}/${r.scored.overall.total}`); })
     .catch((e) => { console.error(e instanceof BenchGuardError ? e.message : (e.stack || e.message)); process.exit(1); });
 }

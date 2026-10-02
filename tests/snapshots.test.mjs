@@ -146,7 +146,7 @@ import { PathError } from '../lib/paths.mjs';
 
 test('snapshots refuse untracked paths matched by settings network_exclude', async (t) => {
   const repo = await makeRepo(); t.after(repo.remove);
-  const settings = { schema: 1, authority_remote: null, outside: [], source: [], interfaces: [], data: [], network_exclude: ['fixtures/private/**'], signing_key: null, attribution: 'forbidden', developer: 'present', harness: {}, typesafeai: { enabled: false, model: null, weights: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, agent_ceiling: 0.35, confidence_floors: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, min_calibration_agent_predictions: 60, request_cap_bytes: 48000 } };
+  const settings = { schema: 2, authority_remote: null, outside: [], source: [], interfaces: [], data: [], network_exclude: ['fixtures/private/**'], signing_key: null, attribution: 'forbidden', developer: 'present', harness: {}, inference: { enabled: false, backend: null, endpoint: null, model: null, weights: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, agent_ceiling: 0.35, confidence_floors: { evidence: 0.2, reach: 0.2, contract: 0.2, surface: 0.2, ambiguity: 0.2 }, min_calibration_agent_predictions: 60, request_cap_bytes: 48000 } };
   await repo.write('.sudus/settings.json', JSON.stringify(settings)); await repo.write('a.txt', 'a'); await repo.commit('base');
   await repo.write('fixtures/private/k.json', '{}');
   await assert.rejects(writeWorkspaceSnapshot(repo.dir), /fixtures\/private\/k.json \(matches fixtures\/private\/\*\*\)/);

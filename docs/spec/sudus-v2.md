@@ -337,24 +337,26 @@ after the developer confirms it. Its fields are:
   records that floor decision, wake prints it and exits 4 instead of
   waiting (the exit-code table above; section 5 restates this for Waiting
   generally). This is the setting an autonomous benchmark runs with.
-- `typesafeai`: the evaluator policy in section 10. `enabled` chooses the
-  measurement's source; it does not turn the measurement off (section 10).
+- `inference`: the evaluator policy in section 10. `enabled` selects one
+  explicit local backend or the review source; measurement stays mandatory.
 
-Revised 2026-09-19: added the `developer` field and reworded the `typesafeai`
-line. Previously this line read "the optional evaluator policy in section
-10," which implied the whole measurement could be switched off. It cannot:
-section 10 now measures every Consequential draft from Jev or, when
-`typesafeai.enabled` is false, from the harness's review model instead, so
-`enabled` only picks the source. The developer said the point of the redesign
-was "to give the coding model a gut check or additional evaluation capability
-to be able to measure the decision," which only works if the measurement
-runs either way.
+Revised 2026-09-19: added the `developer` field and reworded the evaluator
+line (then named `typesafeai`). Previously it read "the optional evaluator
+policy in section 10," which implied the whole measurement could be switched
+off. It cannot: section 10 measures every Consequential draft from the
+explicitly selected local `inference` backend or, when `inference.enabled` is
+false, from the harness's review model instead, so `enabled` only picks the
+source. The developer said the point of the redesign was "to give the coding
+model a gut check or additional evaluation capability to be able to measure
+the decision," which only works if the measurement runs either way. The
+2026-09-27 local-backend revision renamed the active block to `inference`;
+`typesafeai` is now only the legacy schema-1 migration name.
 
 The settings shape is shown once here:
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "authority_remote": "origin",
   "outside": ["README.md", "CHANGELOG.md", ".github/**"],
   "source": ["bin/**", "src/**"],
@@ -378,9 +380,11 @@ The settings shape is shown once here:
       "adversary_transport": "remote"
     }
   },
-  "typesafeai": {
+  "inference": {
     "enabled": false,
-    "model": "jev-1.13.0",
+    "backend": null,
+    "model": null,
+    "endpoint": null,
     "weights": {
       "evidence": 0.2, "reach": 0.2, "contract": 0.2,
       "surface": 0.2, "ambiguity": 0.2
@@ -396,7 +400,7 @@ The settings shape is shown once here:
 }
 ```
 
-Revised 2026-09-19: the `typesafeai` block previously carried seven fixed
+Revised 2026-09-19: the evaluator block (then named `typesafeai`) previously carried seven fixed
 thresholds (`route_confidence`, `sufficient_threshold`, `outside_threshold`,
 `contradicts_ceiling`, `reversible_floor`, `observed_floor` and
 `max_false_downgrade`) that fed a gate cascade, and a `mode` field defaulted
@@ -418,10 +422,12 @@ mechanism input; a reserved path under `source`, `interfaces` or `data`; a
 secret-shaped field or value other than the public `signing_key`; an invalid
 authority remote; an evaluator `weight`, `agent_ceiling` or confidence floor
 outside `[0,1]`; `enabled: true` without a model; `request_cap_bytes` above
-64,000; a `typesafeai.mode` field at all; or `developer` set to anything but
-`"present"` or `"absent"`. `enabled: true` also requires a versioned model
-ID, not an alias, since a calibration record is bound to one resolved
-model. Unknown values fail closed. The evaluator's `code_tiers` field stays
+64,000; an `inference.mode` field at all; or `developer` set to anything but
+`"present"` or `"absent"`. `enabled: true` also requires exactly one of
+`verdict`, `jeff`, or `kev`, an exact literal-loopback (`127.0.0.1` or `[::1]`) `/v1/systemone` endpoint with
+no credentials, and a backend-prefixed pinned model ID rather than an alias,
+since a calibration record is bound to one resolved model/runtime contract.
+Unknown values fail closed. The evaluator's `code_tiers` field stays
 refused; `weights`, `agent_ceiling` and `confidence_floors` are now required
 fields, not refused ones.
 
@@ -600,7 +606,7 @@ nothing and wake ignores it; it keeps the developer's words in the log.
 the evaluator recoverable. The intent fixes the draft, pre-write identity,
 policy and every constructible request digest before network I/O. Each
 attempted model call has its own call record. The measurement holds the draft
-digest, the source (`jev` or `review`), the resolved model, each of the five
+digest, the source (`verdict`, `jeff`, `kev`, `review` or historical `jev`), the resolved model, each of the five
 Score dimensions with its level and confidence, the computed composite, which
 veto if any fired, the suggestion and the reason. Section 10 defines them.
 The suggestion is advisory (section 10): what actually happened is the
@@ -619,9 +625,10 @@ from one source or the other; only the source is optional.
 
 **Calibration.** A record over developer-labelled measurements, bound to one
 evaluation-policy digest. It states the conditional sample, error count,
-confidence bound and pass or fail result. It tunes the composite's `weights`,
-`agent_ceiling` and `confidence_floors` offline, from recorded dimension
-levels; it does not gate whether the agent may decide.
+confidence bound and pass or fail result. It is evidence for tuning the
+composite's `weights`, `agent_ceiling` and `confidence_floors` offline from
+recorded dimension levels; the `sudus calibrate` command itself does not edit
+settings, and calibration does not gate whether the agent may decide.
 
 Revised 2026-09-19: previously "developer-labelled shadow evaluations."
 Shadow is no longer the default source of labelled data (section 10), and a
@@ -948,9 +955,9 @@ The table names logical payload fields. `<ws>` is a workspace snapshot SHA,
 | `direction` | `instead|ask`, the developer's words, harness, Git author | nothing; the log keeps it |
 | `reply` | escalation SHA, text | wake after `ask` |
 | `read` | decision ID, developer-auth evidence | queue and ADR |
-| `evaluation-intent` | draft digest, `<ws>`, pre-write log head, ADR digest, settings digest, policy digest, source `jev|review`, nullable request digest, session, launch (harness, model, transport, boundary) | measurement recovery |
-| `evaluation-call` | intent SHA, source `jev|review`, request digest, `response|failure|indeterminate`, resolved model, transport and session (review source only), raw response bytes or failure class, parsed answers when valid, reported usage | measurement and audit |
-| `measurement` | intent SHA, nullable call SHA, draft digest, source `jev|review`, resolved model, the five Score levels with their confidences, composite, veto or null, `suggested: agent|developer` or null, outcome `floor|unavailable|veto|composite|indeterminate`, reason | escalation, decision, calibration |
+| `evaluation-intent` | draft digest, `<ws>`, pre-write log head, ADR digest, settings digest, policy digest, source `verdict|jeff|kev|review` (historical `jev` accepted for reading), nullable request digest, session, launch (harness, model, transport, boundary) | measurement recovery |
+| `evaluation-call` | intent SHA, source `verdict|jeff|kev|review` (historical `jev` accepted for reading), request digest, `response|failure|indeterminate`, resolved model, transport (`local` for current local inference; review records carry their declared `local|remote`) and nullable session, raw response bytes or failure class, parsed answers when valid, reported usage | measurement and audit |
+| `measurement` | intent SHA, nullable call SHA, draft digest, source `verdict|jeff|kev|review` (historical `jev` accepted for reading), resolved model, the five Score levels with their confidences, composite, veto or null, `suggested: agent|developer` or null, outcome `floor|unavailable|veto|composite|indeterminate`, reason | escalation, decision, calibration |
 | `calibration` | policy digest, labelled-through log head, predicted-agent count, false-downgrade count, one-sided confidence bound, criterion, `pass|fail` | policy validation over labelled measurements |
 | `item` | `backlog|next-feature|defect`, slug, source requirement or changed contract, body | capture, Done and next-feature |
 | `outside` | item SHA, reason, optional evaluation SHA | capture gate |
@@ -1391,9 +1398,9 @@ route, high or low, waives the realization check below.
 
 `sudus escalate` and `sudus decide --consequential` accept the same canonical
 draft. Only a Consequential draft is measured; every other level uses the
-kernel level directly. `sudus measure` (section 5) runs first, from `jev`
-when `typesafeai.enabled` or otherwise the harness's review model (section
-10); when neither source can be reached the draft is `unavailable <class>`
+kernel level directly. `sudus measure` (section 5) runs first, from the explicitly selected
+local backend when `inference.enabled` or otherwise the harness's review
+model (section 10); when neither source can be reached the draft is `unavailable <class>`
 and routes to the developer like any other technical no-call. Otherwise the
 agent reads the measurement, including its advisory `suggested: agent |
 developer`, and decides, except at the narrow floor or a veto, or when the
@@ -1647,6 +1654,16 @@ falsifier lens reduce, but do not remove, that gap.
 
 ## 10. The evaluator: a composite measurement at Consequential
 
+**2026-09-27 implementation revision:** The settings schema is now 2; active settings use `inference`
+(`enabled`, `backend`, `model`, `endpoint` and unchanged composite policy
+fields), not the previous hosted `typesafeai` block. A legacy settings file
+requires an explicit developer-authorized migration to disabled inference;
+the historical Jev records and benchmark artifacts remain readable. The
+current request source, size/egress limits, record source values and
+failure handling are stated below; older dated explanations document the
+prior TypeSafe design, not an active runtime.
+
+
 At a Consequential decision the agent drafts its choice. The evaluator is a
 measurement the agent takes of that draft to check its own judgment before it
 decides. It is not a second decision-maker, an advisor the agent must obey, or
@@ -1667,7 +1684,7 @@ replaces the gate cascade with the composite scoring in
 `.superpowers/bench/composite-design.md` (0.895 route accuracy in the same
 benchmark), makes the agent's own judgment, checked by the measurement, the
 decision by default, and adds a second measurement source so the design still
-works with `typesafeai.enabled: false`, which is what the developer wants
+works with `inference.enabled: false`, which is what the developer wants
 "to be able to use Sudus in an autonomous benchmark."
 
 ### The narrow floor
@@ -1722,7 +1739,7 @@ confidences:
   escalate toward the developer at its own judgment after reading the
   measurement, whatever the suggestion says.
 - `weights`, `agent_ceiling` and `confidence_floors` live in
-  `typesafeai` settings and in the policy digest (section 2); a change to
+  `inference` settings and in the policy digest (section 2); a change to
   any of them resets calibration.
 - The decision record names the measurement and the agent's own decision
   beside the suggestion it read, so an autonomous run is scored on where
@@ -1734,26 +1751,29 @@ confidences:
 
 ### Two sources
 
-The measurement comes from one of two sources, chosen by settings, both
-answering the same five dimensions in the same shape:
+The measurement source is selected in settings, and each source answers the
+same five dimensions. `review` uses the harness's configured review model,
+launched without the agent's own conversation. `verdict`, `jeff`, and `kev`
+are explicit local inference choices in priority order, **not** fallbacks.
+When enabled, `bin/inference.mjs` sends the request only to the configured
+loopback `/v1/systemone` endpoint with the exact backend-prefixed pinned
+model ID. It uses no hosted TypeSafe API or key, never retries or silently
+switches models, and classifies timeout, transport and invalid-response
+failures as `unavailable <class>`. A runtime must reject an input it cannot
+fully encode, rather than truncate or ignore the abstention candidate. No
+schema check constitutes a calibration claim. The old `jev` source stays
+valid only as historical record provenance.
 
-- `jev`: when `typesafeai.enabled`, `bin/typesafeai.mjs` is the one file that
-  sends the request. It reads `TYPESAFEAI_API_KEY` from the environment and
-  never stores it. It retries a `408`, `429` or `5xx` response up to two
-  extra attempts, with exponential backoff from a 500ms base capped at 5s
-  and 25% jitter, honoring a `Retry-After` response header capped at 60s;
-  every request carries a default timeout, classified as its own failure
-  class distinct from a network failure. A request that exhausts its
-  retries or times out is one failed call, `unavailable <class>`, never a
-  silent retry past that bound.
-- `review`: otherwise, the agent starts the harness's configured review
-  model, the adversary model named in `settings.harness` for the running
-  harness, through the harness, with none of the agent's own conversation
-  context, answering the same five dimensions in the same shape as `jev`
-  would. The launch instruction, with its model and transport, and the
-  resolved model are recorded on the evaluation records. When no harness can be detected, the draft is
-  `unavailable <class>` and routes to the developer like any other
-  technical no-call.
+Verdict 151M and Verdict 2.0 have different architectures and artifacts;
+the latter needs its own currently unavailable `.pt` checkpoint. The public
+151M model's Score abstention and confidence semantics need an explicit
+validated adapter. Normalized responses carry the confidence statistic by
+name: Verdict 151M `distribution_concentration`, Jeff
+`distribution_peakedness`, and Kev `score_confidence`; none is a generic
+correctness probability. Jeff's default tempered distribution can disagree
+with its untempered Score; such inconsistent responses are refused. Kev needs
+its full pinned base checkpoint, not merely an adapter. Enable a backend only
+after real Sudus-labelled evaluation and local runtime verification.
 
 State sent to either source carries no policy prose: every question in the
 table above names one concrete field, never a paraphrase of a setting or an
@@ -1793,12 +1813,13 @@ may differ.
 
 ### Limits and failure
 
-`jev-1.13.0` permits 64k request tokens and 32k for state plus the longest
-question; the kernel enforces `request_cap_bytes`, estimates three bytes per
-token, and refuses above 75% of either limit before sending. The review
-source's request is the harness's own message; the no-policy-prose and
-named-field rules above still bind it, and Sudus does not separately cap its
-size beyond the state it sends.
+The kernel enforces `request_cap_bytes` and its conservative byte bound;
+this is not proof of fit for any specific local model. The server must
+preflight the complete tokenized state and questions for its *actual*
+context capacity, including Verdict's documented 512-token input path, and
+return a classified capacity failure without silent truncation. The review
+source uses the harness's own request and maintains the same closed-state
+and egress restrictions.
 
 Requests omit `network_exclude`, credential and host bytes, keys and command
 output regardless of source. A would-be inclusion is not sent; only
@@ -1835,10 +1856,11 @@ the developer. Its denominator is labelled cases whose suggestion was
 one-sided 95% exact binomial upper bound on the false-downgrade rate is a
 kernel constant, not a setting, fixed at 5%; the sample floor is
 `min_calibration_agent_predictions` (default 60) predicted-agent cases.
-Calibration tunes `weights`, `agent_ceiling` and `confidence_floors`; it does
-not gate whether the agent may decide, because gating live routing behind a
-calibration pass is what produced zero agent routing under the superseded
-design. Supersessions are not labels.
+Calibration evidence may inform a separately reviewed change to `weights`,
+`agent_ceiling` and `confidence_floors`; `sudus calibrate` itself only records
+the sample and bound. Calibration does not gate whether the agent may decide,
+because gating live routing behind a calibration pass is what produced zero
+agent routing under the superseded design. Supersessions are not labels.
 
 Revised 2026-09-19: previously "Unread Consequential decisions at Done
 disable the evaluator next commitment until read, routing every draft to the
@@ -1871,12 +1893,18 @@ developer's `ok`, since it is public and posted under the developer's
 account, and keeps the project's code, records and secrets out of it and out
 of the searches it sends. The command also answers to its former name, `cairn`, so a shim, hook
 or working agreement written before 3.0.0 still runs. Claude Code, Codex and Muse manifests share one version. The skills also
-install through the skills CLI. The runtime is Node and Git, with no build,
-package dependency or service. Linux and macOS are supported.
+install through the skills CLI. The core kernel runtime is Node and Git, with
+no build or Node package dependency and no always-on service. An explicitly
+enabled local inference backend is optional infrastructure with its own pinned
+Python/model runtime and loopback service (section 10). Linux and macOS are
+supported.
 
-The evaluator is opt-in and makes zero, one or two POSTs per admitted draft from
-one file. The adversary is a subagent of the current harness that reads the
-project and runs nothing. Two durable refs and the clones' inboxes travel to
+The measurement is mandatory for every Consequential draft. Its local-inference
+source is opt-in: after bounded identity probes, `bin/inference.mjs` makes at
+most one model POST and never retries or switches providers. With local
+inference disabled, the review source uses the current harness instead. The
+adversary is a subagent of the current harness that reads the project and runs
+nothing. Two durable refs and the clones' inboxes travel to
 one confirmed authority remote; the action lease, transaction staging and
 cycle counter remain local.
 
@@ -1954,8 +1982,8 @@ specification.
     a commitment.
 18. The optional Jev evaluator applies only at Consequential and may make an
     option-gate call and a separate owner call. (Superseded by 53.)
-19. `.sudus/settings.json` is the only settings file; the TypeSafe key is
-    `TYPESAFEAI_API_KEY` in the environment.
+19. `.sudus/settings.json` is the only settings file. The former
+    hosted TypeSafe key path is superseded by explicit local inference.
 20. The adversary model and transport are selected per harness and recorded.
     (Superseded by 58.)
 21. Backlog items do not block Done; the next wake promotes at most one.
@@ -2014,7 +2042,7 @@ specification.
 52. Only log and snapshots refs travel; the action lease remains local and
     cross-clone conflicts stop at leased push.
 53. The evaluator measures every Consequential draft, from Jev when
-    `typesafeai.enabled` or the harness's review model otherwise, in one
+    `inference.enabled` or the harness's review model otherwise, in one
     composite-scored call, not an option-gate call and a separate owner
     call. Supersedes 18. The developer's reason: "the point was to give the
     coding model a gut check or additional evaluation capability to be able
@@ -2025,7 +2053,7 @@ specification.
     Supersedes 26. The developer's reason: "the goddamn evaluator was to
     reduce ritual assent."
 55. Live composite measurement, not shadow, is the only mode; there is no
-    `typesafeai.mode` setting, since the composite never withholds or
+    `inference.mode` setting, since the composite never withholds or
     grants authority for a setting to gate, and calibration data comes
     from those same live records, not a separate observation mode.
     Supersedes 27. The developer's reason: "the goddamn evaluator was to
