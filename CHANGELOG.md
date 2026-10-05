@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.15 - 2026-10-05
+
+- After `sudus supersede`, wake names the command that resumes the transition (issue #65). It printed "pending supersession to SLUG; run /existing-project", which read as onboarding the project again, and the agent cannot run that skill itself. It now prints "pending supersession to SLUG; run sudus start SLUG once docs/spec/roadmap.md has a "## SLUG" section listing its Agreed requirements (the existing-project skill's pending step)". `sudus start` says what is missing if the specification or the authorization is not ready. The status band still shows "pending supersession to SLUG".
+
 ## 4.2.14 - 2026-10-03
 
 - Wake names `run REQ`, not `fix ITEM`, for a defect whose fix is recorded when only the requirement's check went stale (issue #64). Any commit to the requirement's mechanism inputs made its pass stale, and wake named the defect again with "has no current pass at or after the fix". The manual's move for `fix` (a failing test, the fix, a commit, a check, then `sudus fix`) would record the fix a second time, while a check was the only step left. Between commitments wake now names `run REQ` with the reason "the fix of ITEM is recorded and no current receipt carries a result for REQ". While a commitment that owns the requirement is open, wake names the check in its usual place: an uncommitted input comes first, and while the report has an open finding, that finding's resolution comes first. A check that fails still names `fix ITEM`, because the fix no longer holds.
