@@ -43,6 +43,8 @@ test('an exit-3 line is sick and a repair; wake that cannot be reached is sleepy
   assert.deepEqual(line, { kind: 'line', line: 'sudus: outside a project; run /new-project or /existing-project', exit: 3 })
   assert.equal(expressionOf(line, false), 'sick')
   assert.deepEqual(bandOf(line), { label: 'Setup', color: 'red', subject: 'outside a project', lines: [] })
+  const pending = parseWake('sudus: pending supersession to second; run sudus start second once docs/spec/roadmap.md has a "## second" section listing its Agreed requirements (the existing-project skill\'s pending step)\n', 3)
+  assert.deepEqual(bandOf(pending), { label: 'Setup', color: 'red', subject: 'pending supersession to second', lines: [] })
   const missing = parseWake('', 1)
   assert.equal(missing.kind, 'missing')
   assert.equal(expressionOf(missing, false), 'sleepy')

@@ -102,7 +102,7 @@ test('a pending supersession and an interrupted transaction are not verdicts', a
     slug: r2.slug, start: r2.startSha, decision: ulid(), transition: ulid(), successor: 'second', carried: [],
     intent: null, results: [],
   });
-  assert.deepEqual(await wake(r2.cwd), { exit: 3, line: 'sudus: pending supersession to second; run /existing-project' });
+  assert.deepEqual(await wake(r2.cwd), { exit: 3, line: 'sudus: pending supersession to second; run sudus start second once docs/spec/roadmap.md has a "## second" section listing its Agreed requirements (the existing-project skill\'s pending step)' });
 });
 
 test('the precedence order is the one section 5 states', () => {
@@ -1039,7 +1039,29 @@ test('Agreed text revised under an open commitment is supersede, not review mech
   await r.commit('raise the bound again');
   await authorize(r.cwd, { quote: 'ok', env: {} });
   await supersede(r.cwd, 'second', { quote: 'raise the bound to 1 ms now', env: {} });
-  assert.deepEqual(await wake(r.cwd), { exit: 3, line: 'sudus: pending supersession to second; run /existing-project' });
+  assert.deepEqual(await wake(r.cwd), { exit: 3, line: 'sudus: pending supersession to second; run sudus start second once docs/spec/roadmap.md has a "## second" section listing its Agreed requirements (the existing-project skill\'s pending step)' });
+});
+
+// Issue #65 (johnwlockwood, 4.2.14): after a supersession wake said "run /existing-project", which
+// read as onboarding the project again, and the agent cannot invoke that skill. The line names the
+// command that resumes the transition, and doing what it says starts the successor.
+test('after a supersession wake names sudus start for the successor, and following it starts the successor (issue #65)', async () => {
+  const { authorize } = await import('../lib/auth.mjs');
+  const r = await loopRepo();
+  const spec = await readFile(join(r.cwd, 'docs/spec/demo.md'), 'utf8');
+  await r.write('docs/spec/demo.md', spec.replace('prints hello for DEMO-001.', 'prints hello for DEMO-001 twice.'));
+  await r.commit('revise the requirement');
+  await authorize(r.cwd, { quote: 'ok', env: {} });
+  await supersede(r.cwd, 'second', { quote: 'say hello twice', env: {} });
+  const out = r.runWake();
+  assert.equal(out.status, 3);
+  assert.equal(out.stdout, 'sudus: pending supersession to second; run sudus start second once docs/spec/roadmap.md has a "## second" section listing its Agreed requirements (the existing-project skill\'s pending step)\n');
+  assert.doesNotMatch(out.stdout, /\/existing-project/);
+  const roadmap = await readFile(join(r.cwd, 'docs/spec/roadmap.md'), 'utf8');
+  await r.write('docs/spec/roadmap.md', roadmap + '\n## second\n\nRequirements: DEMO-001\n\nSays hello twice.\n'); await r.commit('second section');
+  await start(r.cwd, 'second');
+  const v = await wake(r.cwd);
+  assert.deepEqual([v.verdict, v.action, v.target], ['Resolvable', 'run', 'DEMO-001'], JSON.stringify(v));
 });
 
 // A consumer project with 23 requirements and up to 31 receipts each spent 30 s in one wake:
