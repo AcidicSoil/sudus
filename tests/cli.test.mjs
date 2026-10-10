@@ -1059,6 +1059,19 @@ describe('the measure brief and the CLI', () => {
     assert.deepEqual(intent.payload.launch, { harness: 'codex', model: null, transport: null, boundary: 'unenforced' });
     assert.match(r.out, /harness: codex/);
   });
+  // Issue #67: after Done, measure --brief printed a launch whose completion command then found
+  // no pending measurement. It is refused before any record or launch block, and names where the
+  // decision goes instead: the developer's ruling, recorded with the --title form of decide.
+  test('sudus measure --brief after done refuses before writing an intent or printing a launch (issue #67)', async () => {
+    const cwd = await repoWithCommitment(false);
+    await appendRecord(cwd, 'done', 'auth-tokens', { slug: 'auth-tokens', snapshot: await writeWorkspaceSnapshot(cwd) });
+    const r = await run(['measure', '--brief', '--harness', 'codex', ...draftFlags(draft())], cwd, { env: {} });
+    assert.equal(r.code, 1);
+    assert.match(r.err, /^sudus: measure: no commitment is open/);
+    assert.match(r.err, /record their ruling with sudus decide --consequential --title <t>/);
+    assert.equal(r.out, '');
+    assert.equal((await readLog(cwd)).some((x) => x.kind === 'evaluation-intent'), false);
+  });
   test('sudus measure without --brief on a review-source project refuses', async () => {
     const cwd = await repoWithCommitment(false);
     const r = await run(['measure', ...draftFlags(draft())], cwd, { env: { SUDUS_HARNESS: 'claude_code' } });

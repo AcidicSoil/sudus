@@ -941,6 +941,13 @@ refuses it. In every other case the agent may still choose
 `sudus escalate --consequential` past a `suggested: agent` reading, at its
 own judgment.
 
+Nothing is measured between commitments: `sudus measure` refuses when no
+commitment is open, and so do the two commands a measurement serves. A
+Consequential decision then, such as one inside a defect fix after Done, is
+yours. The agent asks you in conversation and records your ruling with
+`sudus decide --consequential --title <t> --rests-on <REQ,...> --wrong-if <t>
+--body "<your words>"`.
+
 Turning on `typesafeai.enabled` in `.sudus/settings.json` picks the
 measurement's source: `jev` (`bin/typesafeai.mjs`, reading
 `TYPESAFEAI_API_KEY` from the environment and never storing it) when
@@ -1170,12 +1177,12 @@ prints one with its references resolved.
 | `fold` | After Done, append every inbox item this clone holds, its own and those fetched, to the log as an ordinary item; an item whose slug the log holds with a different item is reported and left in its inbox. |
 | `retire <item>... --quote <words>` | Record that the developer dropped one or more backlog or next-feature items, or that a spec change they confirmed answers them, with their words as evidence; a retired item is never promoted or offered again. Refuses a defect and a promoted item. |
 | `fix <item-sha>` | Record that a defect item is fixed, naming the workspace snapshot. Runs under the open commitment, or under the last closed one when it raised the defect against its own requirement. |
-| `decide --consequential --title <t> --rests-on <REQ,...> --wrong-if <t> --body <t>` | Record a spec-phase deference ruling, before any commitment is open. |
+| `decide --consequential --title <t> --rests-on <REQ,...> --wrong-if <t> --body <t>` | Record a spec-phase deference ruling, before any commitment is open; or, between commitments, the developer's ruling on a Consequential decision, since nothing is measured then. |
 | `decide --consequential --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> [--option <t>...] [--path <file>...] [--decision <id>...]` | Record a measured work-loop Consequential decision; the agent continues. Refused without a current `composite`-outcome measurement: `sudus: no measurement for this exact draft; run sudus measure first` when the draft differs from the one measured, or a message naming the floor or veto that caught it. |
 | `realize <decision-id> --subject <text>` | Record that a Consequential decision was built. |
 | `escalate [--consequential] --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> [--option <t>...] [--path <file>...] [--decision <id>...]` | Raise a decision; without `--consequential`, a Blocking one (the agent stops). With `--consequential`, the Consequential draft's own measurement forced it here, or the agent chose to. |
 | `calibrate` | Report how many labelled, suggested-agent measurements exist and how many were wrong, against the fixed bound; tunes the composite, never gates it. |
-| `measure [--brief] [--harness <name>] --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> --option <t>... [--path <file>...] [--decision <id>...]` \| `measure <slug> --file <path>` | Take one measurement of a Consequential draft before `decide` or `escalate`; `--brief` prints a launch block for the review source, `--file` completes it. |
+| `measure [--brief] [--harness <name>] --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> --option <t>... [--path <file>...] [--decision <id>...]` \| `measure <slug> --file <path>` | Take one measurement of a Consequential draft before `decide` or `escalate`; `--brief` prints a launch block for the review source, `--file` completes it. Refused when no commitment is open, before any record is written. |
 | `answer <slug> ok\|instead\|ask --quote <words> [--escalation <sha>]` | The developer's answer to an escalation, in their own words. |
 | `reply <slug> <text> [--escalation <sha>]` | The agent's explanation after a developer `ask`. |
 | `review <slug> --file <path>` | Record the builder's review. |
