@@ -1376,6 +1376,21 @@ describe('measure between commitments (issue #67)', () => {
     assert.equal(calls, 0);
     assert.equal((await readLog(cwd)).length, before);
   });
+  // Review of the 4.3.0 candidate: the refusal ran before recovery, so a jev intent a crash left
+  // open inside the last commitment was never finalized (4.2.15 finalized it at the next measure,
+  // and after a successor starts recovery reads only the successor's range). Recovery runs first.
+  test('a measure refused after done still finalizes an intent a crash left open', async () => {
+    const cwd = await repoWithCommitment();
+    await assert.rejects(measure(cwd, draft(), { transport: transport([new Error('crash')]) }), /crash/);
+    const intent = (await readLog(cwd)).at(-1);
+    assert.equal(intent.kind, 'evaluation-intent');
+    await appendRecord(cwd, 'done', 'auth-tokens', { slug: 'auth-tokens', snapshot: await writeWorkspaceSnapshot(cwd) });
+    let calls = 0;
+    await assert.rejects(measure(cwd, draft(), { transport: async () => { calls++; throw new Error('no call expected'); } }), /no commitment is open/);
+    const m = (await readLog(cwd)).at(-1);
+    assert.equal(calls, 0);
+    assert.equal(m.kind, 'measurement'); assert.equal(m.payload.intent, intent.sha); assert.equal(m.payload.outcome, 'indeterminate');
+  });
 });
 
 // --- Task 10: calibration over recorded measurements ------------------------------------------
