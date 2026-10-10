@@ -849,6 +849,12 @@ or declines it with its reason:
 sudus decline reject-empty-names 2 "APP-001 names an empty name, not a long one; the next commitment takes limits"
 ```
 
+When a fix changes after its resolution, the agent runs `sudus resolve`
+for the finding again with the new explanation. The latest resolution
+supersedes the earlier ones: `sudus done` prints it and names the
+resolutions it supersedes, so what you read is the fix that shipped. A
+resolution is recorded only while the commitment is open.
+
 A finding of any severity may be declined, and nothing waits on you for it:
 the agent decides, and Sudus judges through its checks. Fixes make the
 checks out of date, but wake does not ask for a full run after every fix:
@@ -1189,7 +1195,7 @@ prints one with its references resolved.
 | `review mechanism <REQ> [<fail-receipt>]` | Bind a mechanism's review metadata to its current command, working directory and results mode and the requirement's current text; the latest fail receipt for REQ that ran under them when none is given. |
 | `brief <slug> [--harness <name>]` | Write the adversary brief for a reviewed commitment and print how to start the adversary. |
 | `report <slug> --file <path>` | Record the adversary's report. |
-| `resolve <slug> <n> "<how>" [--source <sha>]` | Record a fix for finding `n` of a specific review or report record. |
+| `resolve <slug> <n> "<how>" [--source <sha>]` | Record a fix for finding `n` of a specific review or report record. Run again for a resolved finding when its fix changes: the latest resolution supersedes the earlier ones. |
 | `decline <slug> <n> "<why>" [--source <sha>]` | Record that the agent declines finding `n`, with its reason. |
 | `push` | Push the branch, both durable refs and this clone's inbox to the authority remote, then fetch every other clone's inbox. |
 | `wake` | Print the current verdict. Writes nothing. |

@@ -581,6 +581,30 @@ test('sudus decline records the reason; done lists every finding with its severi
     `- Minor, finding 2 of the report ${rep.slice(0, 12)} at src/demo.mjs: no test for a long name`, `  fixed: fixed (resolution ${res.slice(0, 12)})`, ''].join('\n'));
 });
 
+// Issue #66: a fix revised after its resolution could not be recorded again, so sudus done printed
+// the first fix's explanation for a design that did not ship. A second sudus resolve supersedes
+// the first; done prints the latest and names the resolution it supersedes.
+test('sudus resolve records a revised fix again; done prints the latest and names the earlier one (issue #66)', async () => {
+  const repo = await loopRepo();
+  await repo.passReq('DEMO-001'); await repo.review();
+  const rep = await repo.report([{ n: 1, text: 'a blank name prints a bare comma' }]);
+  const first = await run(['resolve', 'first', '1', 'first design: trim the name', '--source', rep], repo.cwd);
+  assert.equal(first.code, 0, first.err);
+  const second = await run(['resolve', 'first', '1', 'revised design: refuse a blank name', '--source', rep], repo.cwd);
+  assert.equal(second.code, 0, second.err);
+  const [a, b] = (await readLog(repo.cwd)).filter((x) => x.kind === 'resolution');
+  assert.equal(second.out, `sudus: resolution first ${b.sha}\n`);
+  const r = await run(['done', 'first'], repo.cwd);
+  assert.equal(r.code, 0, r.err);
+  const rec = (await readLog(repo.cwd)).filter((x) => x.kind === 'done').at(-1);
+  assert.equal(r.out, [`done ${rec.sha} first`,
+    `review report for first: 1 finding, 1 fixed, 0 declined (adversary report ${rep.slice(0, 12)})`,
+    `- Major, finding 1 of the report ${rep.slice(0, 12)} at src/demo.mjs: a blank name prints a bare comma`,
+    `  fixed: revised design: refuse a blank name (resolution ${b.sha.slice(0, 12)}; supersedes ${a.sha.slice(0, 12)})`, ''].join('\n'));
+  const late = await run(['resolve', 'first', '1', 'too late', '--source', rep], repo.cwd);
+  assert.equal(late.code, 1); assert.match(late.err, /no open commitment first/);
+});
+
 test('sudus accept and sudus dispute are gone in 4.0.0 and say what replaces them', async () => {
   const repo = await loopRepo();
   const a = await run(['accept', 'first', '--file', 'x.json'], repo.cwd);

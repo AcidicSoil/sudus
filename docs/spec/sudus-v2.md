@@ -4,8 +4,21 @@ Prefix: SUDUS
 Scope: the Sudus 2 kernel: its records, verdicts, commands, skills and evaluator
 
 
-Status: Draft, revision 18, 2026-09-26. Nothing here is Agreed until the
+Status: Draft, revision 19, 2026-10-10. Nothing here is Agreed until the
 developer confirms it.
+
+Revision 19 lets a fix revised after its resolution be recorded again
+(section 9, After the report). `sudus resolve` refused a finding already
+resolved, so when a fix changed after its resolution, the first explanation
+stayed the finding's resolution and `sudus done` printed it for a design that
+did not ship (issue #66). A second resolution of a resolved finding now
+supersedes the earlier one: the latest is the finding's resolution, and the
+review report names the ones it supersedes. The resolution record keeps its
+shape, so earlier logs and earlier Sudus versions still read it. A resolution
+is recorded only while the commitment is open. The issue also asked for an
+amendment to the builder's self-review after the report; that is not built,
+since a resolution's explanation can name the review statement it reverses.
+The developer accepted this on 2026-10-10 ("ok: part 1 only").
 
 Revision 18 lets a second clone capture items while another clone holds the
 open commitment (section 4, Inbox; section 8, Capture and promotion). The
@@ -1607,7 +1620,11 @@ are unchanged.
 
 Every finding on the review or the report is the builder's to decide. It
 fixes the finding and records a resolution at a new workspace snapshot, or it
-declines the finding with its reason. A finding of any severity may be
+declines the finding with its reason. When a fix changes after its
+resolution, the builder records a resolution again: the latest is the
+finding's resolution, and the review report names the earlier ones it
+supersedes. A resolution is recorded only while the commitment is open. A
+finding of any severity may be
 declined, and no verdict waits on the adversary or the developer for either:
 the builder is the decision maker, and Sudus judges through its checks. The
 fixes make receipts stale, and the run predicate (section 5) names them once
@@ -1626,6 +1643,10 @@ the evaluator. The builder is the decision maker and Sudus will judge", and
 "Not every commit". A log written before revision 16 still reads: a 3.x
 report completes the review, a 3.x acceptance's findings count, and a
 resolution one rejected leaves its finding open.
+
+Added 2026-10-10 (revision 19, issue #66, on the developer's ok): previously
+a resolved finding refused another resolution, so a fix revised after its
+resolution kept the first explanation in the review report.
 
 ### Model identity and limits of proof
 
