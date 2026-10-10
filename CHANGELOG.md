@@ -7,6 +7,13 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.3.0 - 2026-10-10
+
+Spec revision 19, on the developer's ok of 2026-10-10. No record shape changes; earlier logs still read, and a log with a repeated resolution still reads in earlier versions.
+
+- A fix revised after its resolution can be recorded again (issue #66). `sudus resolve` refused a finding already resolved, so when a fix changed after its resolution, the first explanation stayed the finding's resolution and `sudus done` printed it for a design that did not ship. A second `sudus resolve SLUG N` of a resolved finding now supersedes the earlier one. The review report `sudus done` prints shows the latest and names the resolutions it supersedes. An open finding with the same number still comes first; `--source` reaches a resolved one beside it. A resolution is recorded only while the commitment is open, as before. The working agreement template's `resolve` line now tells the agent to run `sudus resolve` again when a fix changes. The issue's optional amendment to the self-review after the report is not built: a resolution's explanation can name the review statement it reverses.
+- `sudus measure` refused between commitments before recovering an intent a crash left open (found by the adversarial review of this release). Since 4.2.16 such a jev intent from the last commitment was never finalized. Recovery now runs first, and the refused draft still gets no record.
+
 ## 4.2.16 - 2026-10-10
 
 - `sudus measure` refuses when no commitment is open, before it writes any record (issue #67). After Done, `measure --brief` accepted a draft about a new defect, recorded a review intent and printed the command that completes it, and that command failed with "no pending review measurement". A measurement serves `decide --consequential` and `escalate --consequential`, which both need an open commitment, so a measurement between commitments could never be used. The refusal names where the decision goes instead: between commitments a Consequential decision is yours, and the agent records your ruling with `sudus decide --consequential --title ...`. The jev source is refused the same way, without a call.
