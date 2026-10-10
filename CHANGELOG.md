@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.2.16 - 2026-10-10
+
+- `sudus measure` refuses when no commitment is open, before it writes any record (issue #67). After Done, `measure --brief` accepted a draft about a new defect, recorded a review intent and printed the command that completes it, and that command failed with "no pending review measurement". A measurement serves `decide --consequential` and `escalate --consequential`, which both need an open commitment, so a measurement between commitments could never be used. The refusal names where the decision goes instead: between commitments a Consequential decision is yours, and the agent records your ruling with `sudus decide --consequential --title ...`. The jev source is refused the same way, without a call.
+
 ## 4.2.15 - 2026-10-05
 
 - After `sudus supersede`, wake names the command that resumes the transition (issue #65). It printed "pending supersession to SLUG; run /existing-project", which read as onboarding the project again, and the agent cannot run that skill itself. It now prints "pending supersession to SLUG; run sudus start SLUG once docs/spec/roadmap.md has a "## SLUG" section listing its Agreed requirements (the existing-project skill's pending step)". `sudus start` says what is missing if the specification or the authorization is not ready. The status band still shows "pending supersession to SLUG".
