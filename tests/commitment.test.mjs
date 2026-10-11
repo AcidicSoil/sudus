@@ -484,6 +484,70 @@ test('promote refuses while a commitment is open, a section naming Draft text, a
   await assert.rejects(promote(repo.cwd, s), /not an item record/);
 });
 
+import { lint } from '../lib/spec.mjs';
+
+async function finishedWithoutSection(repo, body = 'A covered follow-up\nwith no roadmap section, like DEMO-002.') {
+  await start(repo.cwd, 'first');
+  const b = await item(repo.cwd, { kind: 'backlog', slug: 'missing-section', source: 'DEMO-001', body });
+  await done(repo.cwd, 'first', { unchecked: true });
+  return b;
+}
+
+test('issue #68: promote adds the roadmap section a backlog item lacks, naming its source requirement', async () => {
+  const repo = await project({ authority_remote: null });
+  const b = await finishedWithoutSection(repo);
+  const v = await wake(repo.cwd);
+  assert.deepEqual([v.verdict, v.action, v.target], ['Resolvable', 'promote', 'missing-section']);
+  const sha = await promote(repo.cwd, v.target);
+  const startRec = (await readLog(repo.cwd)).at(-1);
+  assert.equal(startRec.sha, sha);
+  assert.deepEqual([startRec.kind, startRec.payload.slug], ['start', 'missing-section']);
+  assert.deepEqual(startRec.payload.requirements.map((r) => r.requirement), ['CORE-001', 'DEMO-001']);
+  const roadmap = await readFile(join(repo.cwd, 'docs/spec/roadmap.md'), 'utf8');
+  assert.match(roadmap, /^Current: missing-section$/m);
+  // The section says what it delivers with the item's body on one line (the developer's ok).
+  assert.ok(roadmap.endsWith('\n## missing-section\n\nRequirements: DEMO-001\n\nDelivers backlog item missing-section: A covered follow-up with no roadmap section, like DEMO-002.\n'));
+  assert.deepEqual(await lint(repo.cwd), []);
+  assert.equal((await git(['status', '--porcelain', '--', 'docs/spec/roadmap.md'], { cwd: repo.cwd })).stdout, '');
+  assert.notEqual((await wake(repo.cwd)).action, 'promote');
+  assert.equal(b, (await readLog(repo.cwd)).find((r) => r.kind === 'promotion').payload.item);
+});
+
+test('issue #68: a body naming an undefined identifier stays out of the section, so the roadmap still lints', async () => {
+  const repo = await project({ authority_remote: null });
+  const b = await finishedWithoutSection(repo, 'Like DEMO-002. See ABC-123.');
+  await promote(repo.cwd, b);
+  const roadmap = await readFile(join(repo.cwd, 'docs/spec/roadmap.md'), 'utf8');
+  assert.ok(roadmap.endsWith(`\n## missing-section\n\nRequirements: DEMO-001\n\nDelivers backlog item missing-section (${b.slice(0, 12)}); its body is in the promotion decision.\n`));
+  assert.deepEqual(await lint(repo.cwd), []);
+  assert.equal((await readAdr(repo.cwd)).at(-1).body, 'Like DEMO-002. See ABC-123.');
+});
+
+test('issue #68: promote crashed after each write recovers to one section, one promotion and one start', async () => {
+  for (let n = 0; n < 5; n++) {
+    const repo = await project({ authority_remote: null });
+    const b = await finishedWithoutSection(repo);
+    await assert.rejects(promote(repo.cwd, b, { failAfterWrite: n }), new RegExp(`simulated crash after write ${n}`));
+    const intent = (await readLog(repo.cwd)).findLast((r) => r.kind === 'command-intent');
+    assert.equal((await recover(repo.cwd, intent.target)).completed, 'forward', `write ${n}`);
+    const log = await readLog(repo.cwd);
+    assert.equal(log.filter((x) => x.kind === 'promotion').length, 1, `write ${n}: one promotion`);
+    assert.equal(log.filter((x) => x.kind === 'start' && x.payload.slug === 'missing-section').length, 1, `write ${n}: one start`);
+    const roadmap = await readFile(join(repo.cwd, 'docs/spec/roadmap.md'), 'utf8');
+    assert.equal(roadmap.split('\n').filter((l) => l === '## missing-section').length, 1, `write ${n}: one section`);
+    assert.match(roadmap, /^Current: missing-section$/m, `write ${n}`);
+  }
+});
+
+test('issue #68: a refused promote leaves the roadmap without the section', async () => {
+  const repo = await project({ authority_remote: null });
+  const b = await finishedWithoutSection(repo);
+  const before = await readFile(join(repo.cwd, 'docs/spec/roadmap.md'), 'utf8');
+  await repo.write('docs/spec/roadmap.md', before.replace('Current: first\n\n', ''));
+  await assert.rejects(promote(repo.cwd, b), /has no Current: line/);
+  assert.doesNotMatch(await readFile(join(repo.cwd, 'docs/spec/roadmap.md'), 'utf8'), /missing-section/);
+});
+
 import { realize, RealizationError } from '../lib/commitment.mjs';
 import { decide, appendDecision } from '../lib/adr.mjs';
 import { recordManagedWrite } from '../lib/scope.mjs';
