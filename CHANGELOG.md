@@ -7,6 +7,10 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.3.1 - 2026-10-11
+
+- `sudus promote` adds the roadmap section a backlog item lacks (issue #68). Wake named `promote ITEM` for any backlog item, but an item captured with `sudus item --backlog` has no section in docs/spec/roadmap.md, and promote refused it with "no roadmap section ITEM". Promote now adds `## ITEM` with a `Requirements:` line naming the item's source requirement, which capture already checked is Agreed, and a line that says what it delivers with the item's body. A body naming an identifier the specification does not define would fail lint, so that section names the item instead; the body is in the promotion decision either way. The section is written in the promotion's one transaction with the `Current:` move, so recovery after a crash completes it with the rest. A section written beforehand is used as it is, so the agent can still name more requirements.
+
 ## 4.3.0 - 2026-10-10
 
 Spec revision 19, on the developer's ok of 2026-10-10. No record shape changes; earlier logs still read, and a log with a repeated resolution still reads in earlier versions.
