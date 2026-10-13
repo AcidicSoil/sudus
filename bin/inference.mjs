@@ -1,11 +1,12 @@
+import { CLEF_MODELS } from '../lib/clef-models.mjs';
 import { access, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 // Local-only bounded inference transport. It never selects a different backend on failure.
-const BACKENDS = new Set(['verdict', 'jeff', 'kev']);
+const BACKENDS = new Set(['verdict', 'jeff', 'kev', 'clef']);
 const DIMENSIONS = ['evidence', 'reach', 'contract', 'surface', 'ambiguity'];
 const LEVEL_KEYS = ['0', '1', '2', '3', '4'];
-const CONFIDENCE_KIND = Object.freeze({ verdict: 'distribution_concentration', jeff: 'distribution_peakedness', kev: 'score_confidence' });
+const CONFIDENCE_KIND = Object.freeze({ verdict: 'distribution_concentration', jeff: 'distribution_peakedness', kev: 'score_confidence', clef: 'distribution_peakedness' });
 const BODY_CAP = 128 * 1024;
 const KEV_4B = Object.freeze({
   model: 'kev-4b-485ace87',
@@ -132,6 +133,7 @@ export async function post(request, { backend, endpoint, fetchImpl = globalThis.
     DIMENSIONS.some((d) => request.questions[d]?.type !== 'score') ||
     Object.keys(request.questions).length !== 5 ||
     !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300000) throw new InferenceError('config');
+  if (backend === 'clef' && !Object.hasOwn(CLEF_MODELS, request.model)) throw new InferenceError('config');
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
@@ -145,6 +147,15 @@ export async function post(request, { backend, endpoint, fetchImpl = globalThis.
       const value = await readBounded(metadata, 8192);
       try { return JSON.parse(value); } catch { throw new InferenceError('model_unverified'); }
     };
+    if (backend === 'clef') {
+      const expectedModel = CLEF_MODELS[request.model];
+      const attested = await probe('/sudus-healthz');
+      const expected = { ok: true, model: request.model, repo: expectedModel.repo, revision: expectedModel.revision,
+        device: 'cuda', dtype: 'bfloat16', max_length: 16384 };
+      if (Object.entries(expected).some(([key, value]) => attested?.[key] !== value)) {
+        throw new InferenceError('model_unverified');
+      }
+    }
     if (backend === 'verdict') {
       const health = await probe('/healthz');
       if (Object.entries(VERDICT_151M).some(([key, val]) => health?.[key] !== val) || request.model !== VERDICT_151M.model || health.ok !== true) {
