@@ -1371,6 +1371,49 @@ describe('completeReviewMeasurement', () => {
   });
 });
 
+// Issue #67: after Done, measure recorded a review intent and printed the command that completes
+// it, and that command found no pending measurement. A measurement serves decide --consequential
+// or escalate --consequential, and both need an open commitment, so between commitments measure
+// refuses before it writes a record, for either source.
+import { done as doneCommitment, item as recordItem } from '../lib/commitment.mjs';
+describe('measure between commitments (issue #67)', () => {
+  test('after a real done, a draft about a new defect is refused and nothing is recorded', async () => {
+    const r = await loopRepo({ reqs: ['DEMO-001'] });
+    await r.passReq('DEMO-001'); await r.review(); await r.report();
+    await doneCommitment(r.cwd, 'first');
+    const defect = await recordItem(r.cwd, { kind: 'defect', slug: 'demo-defect', source: 'DEMO-001', body: 'a defect' });
+    const before = (await readLog(r.cwd)).length;
+    const d = { ...draft(), commitment: 'first', concerns: [`item:${defect}`], named_paths: ['src/demo.mjs'] };
+    await assert.rejects(measure(r.cwd, d, { session: 'sess-agent', harness: 'codex', env: {} }),
+      (e) => e instanceof DraftError && /no commitment is open/.test(e.message));
+    assert.equal((await readLog(r.cwd)).length, before);
+  });
+  test('the jev source is refused too, without a call', async () => {
+    const cwd = await repoWithCommitment();
+    await appendRecord(cwd, 'done', 'auth-tokens', { slug: 'auth-tokens', snapshot: await writeWorkspaceSnapshot(cwd) });
+    const before = (await readLog(cwd)).length;
+    let calls = 0;
+    await assert.rejects(measure(cwd, draft(), { transport: async () => { calls++; throw new Error('no call expected'); } }), /no commitment is open/);
+    assert.equal(calls, 0);
+    assert.equal((await readLog(cwd)).length, before);
+  });
+  // Review of the 4.3.0 candidate: the refusal ran before recovery, so a jev intent a crash left
+  // open inside the last commitment was never finalized (4.2.15 finalized it at the next measure,
+  // and after a successor starts recovery reads only the successor's range). Recovery runs first.
+  test('a measure refused after done still finalizes an intent a crash left open', async () => {
+    const cwd = await repoWithCommitment();
+    await assert.rejects(measure(cwd, draft(), { transport: transport([new Error('crash')]) }), /crash/);
+    const intent = (await readLog(cwd)).at(-1);
+    assert.equal(intent.kind, 'evaluation-intent');
+    await appendRecord(cwd, 'done', 'auth-tokens', { slug: 'auth-tokens', snapshot: await writeWorkspaceSnapshot(cwd) });
+    let calls = 0;
+    await assert.rejects(measure(cwd, draft(), { transport: async () => { calls++; throw new Error('no call expected'); } }), /no commitment is open/);
+    const m = (await readLog(cwd)).at(-1);
+    assert.equal(calls, 0);
+    assert.equal(m.kind, 'measurement'); assert.equal(m.payload.intent, intent.sha); assert.equal(m.payload.outcome, 'indeterminate');
+  });
+});
+
 // --- Task 10: calibration over recorded measurements ------------------------------------------
 // Section 10, "Record and calibration" / "The policy digest ... a change to any of them resets
 // calibration": upperBound (the unchanged one-sided exact binomial bound) and calibrate(cwd),

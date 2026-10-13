@@ -849,6 +849,12 @@ or declines it with its reason:
 sudus decline reject-empty-names 2 "APP-001 names an empty name, not a long one; the next commitment takes limits"
 ```
 
+When a fix changes after its resolution, the agent runs `sudus resolve`
+for the finding again with the new explanation. The latest resolution
+supersedes the earlier ones: `sudus done` prints it and names the
+resolutions it supersedes, so what you read is the fix that shipped. A
+resolution is recorded only while the commitment is open.
+
 A finding of any severity may be declined, and nothing waits on you for it:
 the agent decides, and Sudus judges through its checks. Fixes make the
 checks out of date, but wake does not ask for a full run after every fix:
@@ -940,6 +946,13 @@ Either one sends the draft to you, and `sudus decide --consequential`
 refuses it. In every other case the agent may still choose
 `sudus escalate --consequential` past a `suggested: agent` reading, at its
 own judgment.
+
+Nothing is measured between commitments: `sudus measure` refuses when no
+commitment is open, and so do the two commands a measurement serves. A
+Consequential decision then, such as one inside a defect fix after Done, is
+yours. The agent asks you in conversation and records your ruling with
+`sudus decide --consequential --title <t> --rests-on <REQ,...> --wrong-if <t>
+--body "<your words>"`.
 
 Turning on `inference.enabled` in `.sudus/settings.json` selects exactly
 one named local backend (`verdict`, `jeff` or `kev`) and a loopback-only
@@ -1263,7 +1276,7 @@ specific than the action word alone.
 | `reconcile ACTION` | A local action lease exists with no matching finished work, usually left by a session that ended. Finish the action and `sudus end`, or `sudus end --abandon`; a dead session's lease needs no `--lease`. |
 | `scope PATH` | An undeclared change was observed. Restore it (`sudus scope PATH restore`) or ask to keep it (`sudus escalate`, then `sudus scope PATH keep`); the breach sha wake's reason names works too, and several breaches go in one call before the disposition. |
 | `supersede SLUG` | The Agreed text of a requirement in the open commitment was revised under it, and no check or review can bind to both the frozen and the current text. Restore the text the start froze, or ask the developer and `sudus supersede <successor> --quote "..."` so the successor freezes the revised text. |
-| `fix ITEM` | A recorded defect is still open: this commitment's own while it is open, any defect between commitments. Write a failing test, fix it, commit, check, then `sudus fix ITEM` (the slug wake prints, or the sha). |
+| `fix ITEM` | A recorded defect is still open: this commitment's own while it is open, any defect between commitments. Write a failing test, fix it, commit, check, then `sudus fix ITEM` (the slug wake prints, or the sha). Once the fix is recorded, a commit that makes the requirement's pass stale makes wake name `run REQ`, not `fix` again: only the check is due. A check that fails names `fix` again. |
 | `record PATH` / `commit PATH` | A declared input has uncommitted changes with no covering lease. Lease the action that changes it with `sudus begin <action> <target>` (`record` is not a begin action), then commit; or revert it. An untracked build artifact under a declared input is gitignored instead. |
 | `declare REQ` | No mechanism speaks for this requirement yet. `sudus declare` one. |
 | `run REQ` | A check is due: `sudus check REQ`. |
@@ -1277,7 +1290,7 @@ specific than the action word alone.
 | `build DECISION` | Build what the decision says, commit, then `sudus realize`. |
 | `done SLUG` | Every condition holds: `sudus done SLUG`. |
 | `fold ITEM` | No commitment is open and an inbox holds an item another clone captured while the commitment was open: `sudus fold` appends every such item to the log. |
-| `promote` | No commitment is open and the backlog holds an item. Choose one; `sudus promote ITEM` (slug or sha). It refuses while any defect is unfixed, and while `Current:` names a section that is neither the finished commitment nor the item. An item other work already delivered is retired instead: `sudus escalate --commitment <finished slug> --concern retire:<item sha> ...`, and the developer's `ok` takes it out of the backlog. To rank a new feature above the waiting items, the agent escalates with `--concern wait:<item sha>` per item; your `ok` lets wake say Done while they wait, `sudus show items` marks them, and after the next Done wake names them again. |
+| `promote` | No commitment is open and the backlog holds an item. Choose one; `sudus promote ITEM` (slug or sha). When the roadmap has no section for the item, promote adds one: it names the item's source requirement and says what it delivers with the item's body. Write the section first to name more requirements. It refuses while any defect is unfixed, and while `Current:` names a section that is neither the finished commitment nor the item. An item other work already delivered is retired instead: `sudus escalate --commitment <finished slug> --concern retire:<item sha> ...`, and the developer's `ok` takes it out of the backlog. To rank a new feature above the waiting items, the agent escalates with `--concern wait:<item sha>` per item; your `ok` lets wake say Done while they wait, `sudus show items` marks them, and after the next Done wake names them again. |
 | `reply SLUG` | You asked a question with `ask`; the agent owes an explanation: `sudus reply SLUG "..."`. |
 | `Waiting` | An escalation needs your answer. With `developer: absent` no one can answer any escalation; wake exits 4 instead of sitting there. |
 
@@ -1312,19 +1325,19 @@ prints one with its references resolved.
 | `fold` | After Done, append every inbox item this clone holds, its own and those fetched, to the log as an ordinary item; an item whose slug the log holds with a different item is reported and left in its inbox. |
 | `retire <item>... --quote <words>` | Record that the developer dropped one or more backlog or next-feature items, or that a spec change they confirmed answers them, with their words as evidence; a retired item is never promoted or offered again. Refuses a defect and a promoted item. |
 | `fix <item-sha>` | Record that a defect item is fixed, naming the workspace snapshot. Runs under the open commitment, or under the last closed one when it raised the defect against its own requirement. |
-| `decide --consequential --title <t> --rests-on <REQ,...> --wrong-if <t> --body <t>` | Record a spec-phase deference ruling, before any commitment is open. |
+| `decide --consequential --title <t> --rests-on <REQ,...> --wrong-if <t> --body <t>` | Record a spec-phase deference ruling, before any commitment is open; or, between commitments, the developer's ruling on a Consequential decision, since nothing is measured then. |
 | `decide --consequential --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> [--option <t>...] [--path <file>...] [--decision <id>...]` | Record a measured work-loop Consequential decision; the agent continues. Refused without a current `composite`-outcome measurement: `sudus: no measurement for this exact draft; run sudus measure first` when the draft differs from the one measured, or a message naming the floor or veto that caught it. |
 | `realize <decision-id> --subject <text>` | Record that a Consequential decision was built. |
 | `escalate [--consequential] --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> [--option <t>...] [--path <file>...] [--decision <id>...]` | Raise a decision; without `--consequential`, a Blocking one (the agent stops). With `--consequential`, the Consequential draft's own measurement forced it here, or the agent chose to. |
 | `calibrate` | Report and record how many labelled, suggested-agent measurements exist and how many were wrong, against the fixed bound; it never edits settings or gates authority. |
-| `measure [--brief] [--harness <name>] --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> --option <t>... [--path <file>...] [--decision <id>...]` \| `measure <slug> --file <path>` | Take one measurement of a Consequential draft before `decide` or `escalate`; `--brief` prints a launch block for the review source, `--file` completes it. |
+| `measure [--brief] [--harness <name>] --commitment <s> --concern <token>... --question <q> --recommendation <r> --because <b> --if-wrong <w> --instead <i> --option <t>... [--path <file>...] [--decision <id>...]` \| `measure <slug> --file <path>` | Take one measurement of a Consequential draft before `decide` or `escalate`; `--brief` prints a launch block for the review source, `--file` completes it. Refused when no commitment is open, before any record of the draft is written. |
 | `answer <slug> ok\|instead\|ask --quote <words> [--escalation <sha>]` | The developer's answer to an escalation, in their own words. |
 | `reply <slug> <text> [--escalation <sha>]` | The agent's explanation after a developer `ask`. |
 | `review <slug> --file <path>` | Record the builder's review. |
 | `review mechanism <REQ> [<fail-receipt>]` | Bind a mechanism's review metadata to its current command, working directory and results mode and the requirement's current text; the latest fail receipt for REQ that ran under them when none is given. |
 | `brief <slug> [--harness <name>]` | Write the adversary brief for a reviewed commitment and print how to start the adversary. |
 | `report <slug> --file <path>` | Record the adversary's report. |
-| `resolve <slug> <n> "<how>" [--source <sha>]` | Record a fix for finding `n` of a specific review or report record. |
+| `resolve <slug> <n> "<how>" [--source <sha>]` | Record a fix for finding `n` of a specific review or report record. Run again for a resolved finding when its fix changes: the latest resolution supersedes the earlier ones. |
 | `decline <slug> <n> "<why>" [--source <sha>]` | Record that the agent declines finding `n`, with its reason. |
 | `push` | Push the branch, both durable refs and this clone's inbox to the authority remote, then fetch every other clone's inbox. |
 | `wake` | Print the current verdict. Writes nothing. |

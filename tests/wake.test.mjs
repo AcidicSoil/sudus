@@ -102,7 +102,7 @@ test('a pending supersession and an interrupted transaction are not verdicts', a
     slug: r2.slug, start: r2.startSha, decision: ulid(), transition: ulid(), successor: 'second', carried: [],
     intent: null, results: [],
   });
-  assert.deepEqual(await wake(r2.cwd), { exit: 3, line: 'sudus: pending supersession to second; run /existing-project' });
+  assert.deepEqual(await wake(r2.cwd), { exit: 3, line: 'sudus: pending supersession to second; run sudus start second once docs/spec/roadmap.md has a "## second" section listing its Agreed requirements (the existing-project skill\'s pending step)' });
 });
 
 test('the precedence order is the one section 5 states', () => {
@@ -416,7 +416,8 @@ test('an unfixed defect against a set requirement is named before dirty inputs',
   assert.deepEqual([v.action, v.target], ['fix', 'wrong-greeting']);
   await r.commit('fix greeting');
   await r.add('fix', 'wrong-greeting', { item, snapshot: await r.snap() });
-  assert.equal((await wake(r.cwd)).action, 'fix');           // no current pass at or after the fix yet
+  v = await wake(r.cwd);
+  assert.deepEqual([v.action, v.target], ['run', 'DEMO-001'], JSON.stringify(v));   // the fix is recorded; the check is next (issue #64)
   await r.passReq('DEMO-001');
   assert.notEqual((await wake(r.cwd)).action, 'fix');
 });
@@ -947,11 +948,58 @@ test('a defect against a requirement outside the last commitment\'s set is disch
   await authorize(r.cwd, { quote: 'ok', env: {} });
   await start(r.cwd, 'second');
   await done(r.cwd, 'second', { unchecked: true });
-  assert.match((await wake(r.cwd)).reason, /DEMO-001 has no current pass at or after the fix/);
+  assert.match((await wake(r.cwd)).reason, /the fix of gate is recorded and no current receipt carries a result for DEMO-001/);
   await check(r.cwd, 'DEMO-001');
   const v = await wake(r.cwd);
-  assert.notEqual(v.reason, 'DEMO-001 has no current pass at or after the fix', JSON.stringify(v));
+  assert.notEqual(v.reason, 'the fix of gate is recorded and no current receipt carries a result for DEMO-001', JSON.stringify(v));
   assert.notEqual(v.target, 'gate', JSON.stringify(v));
+});
+// Issue #64 (eas4ai, 4.2.13): a defect whose fix was recorded was named `fix` again whenever its
+// requirement's pass went stale, as after any commit to the mechanism's inputs. The manual's fix
+// move then records the fix a second time; the one step left is a check, and wake names it.
+async function fixedBetweenCommitments() {
+  const { done, item, fix } = await import('../lib/commitment.mjs');
+  const { check } = await import('../lib/check.mjs');
+  const r = await loopRepo({ reqs: ['DEMO-001', 'DEMO-002'] });
+  await r.passReq('DEMO-001'); await r.passReq('DEMO-002'); await r.review(); await r.report();
+  await done(r.cwd, 'first');
+  await item(r.cwd, { kind: 'defect', slug: 'gate', source: 'DEMO-001', body: 'x' });
+  await r.write('src/demo.mjs', 'console.log("hey");\n'); await r.commit('fix gate');
+  await check(r.cwd, 'DEMO-001');
+  await fix(r.cwd, 'gate');
+  assert.equal((await wake(r.cwd)).verdict, 'Done');
+  return r;
+}
+test('between commitments a recorded fix whose pass went stale names run REQ, a check alone clears it, and a failing check is fix again (issue #64)', async () => {
+  const { check } = await import('../lib/check.mjs');
+  const r = await fixedBetweenCommitments();
+  await r.write('src/demo.mjs', 'console.log("hey there");\n'); await r.commit('a source change');
+  let v = await wake(r.cwd);
+  assert.deepEqual([v.action, v.target, v.reason, v.predicate], ['run', 'DEMO-001', 'the fix of gate is recorded and no current receipt carries a result for DEMO-001', PREDICATES.run], JSON.stringify(v));
+  await check(r.cwd, 'DEMO-001');
+  assert.equal((await wake(r.cwd)).verdict, 'Done');   // no second `sudus fix`
+  // A check that fails says the fix no longer holds: that is the defect, not a check to run.
+  await r.write('flags/DEMO-001', 'fail\n'); await r.commit('the defect returns');
+  await check(r.cwd, 'DEMO-001');
+  v = await wake(r.cwd);
+  assert.deepEqual([v.action, v.target, v.reason], ['fix', 'gate', 'DEMO-001 has no current pass at or after the fix'], JSON.stringify(v));
+});
+test('under a commitment that owns the requirement, a stale pass after a recorded fix is the run predicate\'s, which waits on an open finding (issue #64)', async () => {
+  const { authorize } = await import('../lib/auth.mjs');
+  const { check } = await import('../lib/check.mjs');
+  const r = await fixedBetweenCommitments();
+  const roadmap = await readFile(join(r.cwd, 'docs/spec/roadmap.md'), 'utf8');
+  await r.write('docs/spec/roadmap.md', roadmap.replace('Current: first', 'Current: second') + '\n## second\n\nRequirements: DEMO-001 DEMO-002\n\nMore demo.\n'); await r.commit('second');
+  await authorize(r.cwd, { quote: 'ok', env: {} });
+  await start(r.cwd, 'second');
+  await check(r.cwd, 'DEMO-001'); await check(r.cwd, 'DEMO-002');
+  await r.review(); const rep = await r.report([{ n: 1, text: 'a finding' }]);
+  await r.write('src/demo.mjs', 'console.log("hey again");\n'); await r.commit('work on the finding');
+  let v = await wake(r.cwd);
+  assert.deepEqual([v.action, v.target], ['resolve', 'second 1'], JSON.stringify(v));   // the checks run once, after the last finding
+  await r.resolveFinding(rep, 1);
+  v = await wake(r.cwd);
+  assert.deepEqual([v.action, v.target, v.reason], ['run', 'DEMO-001', 'no current receipt carries a result for DEMO-001'], JSON.stringify(v));
 });
 // Report of 2026-09-23 (a consumer project, 3.0.3): an Agreed requirement's text was revised under
 // the open commitment. Receipts and the mechanism review bound to the revised text, wake's review
@@ -990,7 +1038,29 @@ test('Agreed text revised under an open commitment is supersede, not review mech
   await r.commit('raise the bound again');
   await authorize(r.cwd, { quote: 'ok', env: {} });
   await supersede(r.cwd, 'second', { quote: 'raise the bound to 1 ms now', env: {} });
-  assert.deepEqual(await wake(r.cwd), { exit: 3, line: 'sudus: pending supersession to second; run /existing-project' });
+  assert.deepEqual(await wake(r.cwd), { exit: 3, line: 'sudus: pending supersession to second; run sudus start second once docs/spec/roadmap.md has a "## second" section listing its Agreed requirements (the existing-project skill\'s pending step)' });
+});
+
+// Issue #65 (johnwlockwood, 4.2.14): after a supersession wake said "run /existing-project", which
+// read as onboarding the project again, and the agent cannot invoke that skill. The line names the
+// command that resumes the transition, and doing what it says starts the successor.
+test('after a supersession wake names sudus start for the successor, and following it starts the successor (issue #65)', async () => {
+  const { authorize } = await import('../lib/auth.mjs');
+  const r = await loopRepo();
+  const spec = await readFile(join(r.cwd, 'docs/spec/demo.md'), 'utf8');
+  await r.write('docs/spec/demo.md', spec.replace('prints hello for DEMO-001.', 'prints hello for DEMO-001 twice.'));
+  await r.commit('revise the requirement');
+  await authorize(r.cwd, { quote: 'ok', env: {} });
+  await supersede(r.cwd, 'second', { quote: 'say hello twice', env: {} });
+  const out = r.runWake();
+  assert.equal(out.status, 3);
+  assert.equal(out.stdout, 'sudus: pending supersession to second; run sudus start second once docs/spec/roadmap.md has a "## second" section listing its Agreed requirements (the existing-project skill\'s pending step)\n');
+  assert.doesNotMatch(out.stdout, /\/existing-project/);
+  const roadmap = await readFile(join(r.cwd, 'docs/spec/roadmap.md'), 'utf8');
+  await r.write('docs/spec/roadmap.md', roadmap + '\n## second\n\nRequirements: DEMO-001\n\nSays hello twice.\n'); await r.commit('second section');
+  await start(r.cwd, 'second');
+  const v = await wake(r.cwd);
+  assert.deepEqual([v.verdict, v.action, v.target], ['Resolvable', 'run', 'DEMO-001'], JSON.stringify(v));
 });
 
 // A consumer project with 23 requirements and up to 31 receipts each spent 30 s in one wake:

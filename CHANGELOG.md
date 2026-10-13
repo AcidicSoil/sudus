@@ -7,6 +7,29 @@ or document meaning; a minor adds or revises requirements, verdicts, or
 record shapes and still reads earlier records; a major changes what
 earlier records mean.
 
+## 4.3.1 - 2026-10-11
+
+- `sudus promote` adds the roadmap section a backlog item lacks (issue #68). Wake named `promote ITEM` for any backlog item, but an item captured with `sudus item --backlog` has no section in docs/spec/roadmap.md, and promote refused it with "no roadmap section ITEM". Promote now adds `## ITEM` with a `Requirements:` line naming the item's source requirement, which capture already checked is Agreed, and a line that says what it delivers with the item's body. A body naming an identifier the specification does not define would fail lint, so that section names the item instead; the body is in the promotion decision either way. The section is written in the promotion's one transaction with the `Current:` move, so recovery after a crash completes it with the rest. A section written beforehand is used as it is, so the agent can still name more requirements.
+
+## 4.3.0 - 2026-10-10
+
+Spec revision 19, on the developer's ok of 2026-10-10. No record shape changes; earlier logs still read, and a log with a repeated resolution still reads in earlier versions.
+
+- A fix revised after its resolution can be recorded again (issue #66). `sudus resolve` refused a finding already resolved, so when a fix changed after its resolution, the first explanation stayed the finding's resolution and `sudus done` printed it for a design that did not ship. A second `sudus resolve SLUG N` of a resolved finding now supersedes the earlier one. The review report `sudus done` prints shows the latest and names the resolutions it supersedes. An open finding with the same number still comes first; `--source` reaches a resolved one beside it. A resolution is recorded only while the commitment is open, as before. The working agreement template's `resolve` line now tells the agent to run `sudus resolve` again when a fix changes. The issue's optional amendment to the self-review after the report is not built: a resolution's explanation can name the review statement it reverses.
+- `sudus measure` refused between commitments before recovering an intent a crash left open (found by the adversarial review of this release). Since 4.2.16 such a jev intent from the last commitment was never finalized. Recovery now runs first, and the refused draft still gets no record.
+
+## 4.2.16 - 2026-10-10
+
+- `sudus measure` refuses when no commitment is open, before it writes any record (issue #67). After Done, `measure --brief` accepted a draft about a new defect, recorded a review intent and printed the command that completes it, and that command failed with "no pending review measurement". A measurement serves `decide --consequential` and `escalate --consequential`, which both need an open commitment, so a measurement between commitments could never be used. The refusal names where the decision goes instead: between commitments a Consequential decision is yours, and the agent records your ruling with `sudus decide --consequential --title ...`. The jev source is refused the same way, without a call.
+
+## 4.2.15 - 2026-10-05
+
+- After `sudus supersede`, wake names the command that resumes the transition (issue #65). It printed "pending supersession to SLUG; run /existing-project", which read as onboarding the project again, and the agent cannot run that skill itself. It now prints "pending supersession to SLUG; run sudus start SLUG once docs/spec/roadmap.md has a "## SLUG" section listing its Agreed requirements (the existing-project skill's pending step)". `sudus start` says what is missing if the specification or the authorization is not ready. The status band still shows "pending supersession to SLUG".
+
+## 4.2.14 - 2026-10-03
+
+- Wake names `run REQ`, not `fix ITEM`, for a defect whose fix is recorded when only the requirement's check went stale (issue #64). Any commit to the requirement's mechanism inputs made its pass stale, and wake named the defect again with "has no current pass at or after the fix". The manual's move for `fix` (a failing test, the fix, a commit, a check, then `sudus fix`) would record the fix a second time, while a check was the only step left. Between commitments wake now names `run REQ` with the reason "the fix of ITEM is recorded and no current receipt carries a result for REQ". While a commitment that owns the requirement is open, wake names the check in its usual place: an uncommitted input comes first, and while the report has an open finding, that finding's resolution comes first. A check that fails still names `fix ITEM`, because the fix no longer holds.
+
 ## 4.2.13 - 2026-10-02
 
 - Under Codex the stop hook no longer shows the wake verdict after every response (issue #63). Since 4.2.11 it sent the whole block (verdict, action, reason, predicate) as Codex's `systemMessage`, which Codex shows to you, while the per-turn hook already gives the agent the verdict. A routine verdict, or a project that is not initialized, now prints nothing at stop. The `systemMessage` carries only what needs you: the version-mismatch or pin line, or a wake that failed with its output. Without `PLUGIN_ROOT` (Claude Code) the stop hook prints as before.

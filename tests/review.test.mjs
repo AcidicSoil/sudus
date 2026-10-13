@@ -329,8 +329,45 @@ test('resolve names finding N on its exact source record and the snapshot after 
   assert.deepEqual([p.source, p.finding, p.explanation], [r.rep, 1, 'trim before the guard']);
   assert.notEqual(p.snapshot, r.revPayload.snapshot);
   assert.deepEqual(ledger(await r.log(), 'first').map((f) => [f.source, f.n, f.severity, f.status]), [[r.rep, 1, 'Major', 'resolved']]);
-  await assert.rejects(fixed(r, 1, 'again'), new RegExp(`finding 1 on ${r.rep} is resolved by ${sha}`));
   assert.deepEqual((await reviewState(r.cwd, 'first')).reasons, []);
+});
+
+// Issue #66: a fix revised after its resolution could not be recorded again, so the review report
+// printed the first fix's explanation for a design that did not ship. A second resolution of a
+// resolved finding supersedes the first: the ledger reads the latest and lists the earlier ones,
+// and the finding stays closed for the Done rule and wake.
+test('a resolved finding is resolved again by a revised fix; the latest supersedes the earlier one (issue #66)', async () => {
+  const r = await reported();
+  const sha = await fixed(r, 1, 'trim before the guard');
+  await assert.rejects(decline(r.cwd, 'first', 1, 'changed my mind'), new RegExp(`finding 1 on ${r.rep} is resolved by ${sha}`));
+  const again = await fixed(r, 1, 'refuse a blank name instead');
+  assert.deepEqual(decodeRecord(await catCommit(r.cwd, again)).payload.explanation, 'refuse a blank name instead');
+  const [row] = ledger(await r.log(), 'first');
+  assert.deepEqual([row.status, row.resolution.sha, row.superseded.map((x) => x.sha)], ['resolved', again, [sha]]);
+  const third = await fixed(r, 1, 'a third design');
+  assert.deepEqual(ledger(await r.log(), 'first')[0].superseded.map((x) => x.sha), [sha, again]);
+  assert.equal(ledger(await r.log(), 'first')[0].resolution.sha, third);
+  assert.deepEqual((await reviewState(r.cwd, 'first')).reasons, []);
+  assert.equal(await predicates.find((p) => p.name === 'resolve').test(await readState(r.cwd)), null);
+});
+
+test('resolving again prefers an open finding with the same number; --source reaches the resolved one (issue #66)', async () => {
+  const r = await briefed({ findings: [{ n: 1, text: 'builder finding' }] });
+  r.rep = await report(r.cwd, 'first', adversary(r));
+  const onReport = await fixed(r, 1, 'fixed the report finding', { source: r.rep });
+  const onReview = await fixed(r, 1, 'fixed the builder finding');
+  assert.equal(decodeRecord(await catCommit(r.cwd, onReview)).payload.source, r.rev);
+  await assert.rejects(fixed(r, 1, 'which one?'), /finding 1 is on .* and .*; pass --source <sha>/);
+  const revised = await fixed(r, 1, 'revised the report fix', { source: r.rep });
+  const rows = ledger(await r.log(), 'first');
+  assert.deepEqual(rows.map((f) => [f.source, f.resolution.sha, f.superseded.map((x) => x.sha)]), [[r.rev, onReview, []], [r.rep, revised, [onReport]]]);
+});
+
+test('after done a finding is not resolved again (issue #66)', async () => {
+  const r = await reported();
+  await fixed(r, 1, 'trim before the guard');
+  await r.add('done', 'first', { slug: 'first', snapshot: await writeWorkspaceSnapshot(r.cwd) });
+  await assert.rejects(fixed(r, 1, 'too late'), /no open commitment first/);
 });
 
 // Developer's ruling, 2026-09-25: "The builder is the decision maker and Sudus will judge". A
@@ -645,7 +682,10 @@ test('only the supersession that opened a commitment carries findings into it (i
   const rep = await report(r.cwd, 'third', adversary(r));
   assert.deepEqual(ledger(await r.log(), 'third').map((f) => [f.source, f.status]), [[rep, 'open']]);
   const res = await resolve(r.cwd, 'third', 1, 'rejects whitespace-only names');
-  await assert.rejects(resolve(r.cwd, 'third', 1, 'again'), { message: `sudus: resolve: finding 1 on ${rep} is resolved by ${res}` });
+  // Issue #66: resolving it again supersedes the commitment's own resolution, never the carried record.
+  const again = await resolve(r.cwd, 'third', 1, 'again');
+  assert.equal(decodeRecord(await catCommit(r.cwd, again)).payload.source, rep);
+  assert.deepEqual(ledger(await r.log(), 'third').map((f) => [f.source, f.resolution.sha, f.superseded.map((x) => x.sha)]), [[rep, again, [res]]]);
   await assert.rejects(escalate(r.cwd, disputeOf(r.rep, 1, 'third')), { message: `sudus: no record ${r.rep} in the open range or carried into it` });
   assert.equal(await predicates.find((p) => p.name === 'resolve').test(await readState(r.cwd)), null);
 });
