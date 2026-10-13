@@ -52,7 +52,7 @@ const DEFAULT_PROJECT_FILES = { 'AGENTS.md': '# Working agreement\n', 'docs/spec
 export async function makeProject({ settings = {}, files = {}, layout = 'sudus' } = {}) {
   const repo = await makeRepo();
   const remote = await mkdtemp(join(tmpdir(), 'sudus-remote-'));
-  await run('git', ['init', '-q', '--bare', remote]);
+  await run('git', ['init', '-q', '--bare', '--initial-branch=main', remote]);
   await repo.git('remote', 'add', 'origin', remote);
   const merged = { ...DEFAULT_SETTINGS('origin', null), ...settings };
   await repo.write(`.${layout}/settings.json`, JSON.stringify(merged, null, 2) + '\n');

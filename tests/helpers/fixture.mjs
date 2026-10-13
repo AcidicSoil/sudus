@@ -98,7 +98,7 @@ export function buildProject({ settings = SETTINGS } = {}) {
   const remote = mkdtempSync(join(tmpdir(), "sudus-remote-"));
   const sh = (cwd, cmd, args, opts = {}) => spawnSync(cmd, args, { cwd, encoding: "utf8", ...opts });
   const git = (...a) => { const r = sh(dir, "/usr/bin/git", a); assert.equal(r.status, 0, `git ${a.join(" ")}: ${r.stderr}`); return r.stdout; };
-  spawnSync("/usr/bin/git", ["init", "-q", "--bare", remote]);
+  spawnSync("/usr/bin/git", ["init", "-q", "--bare", "--initial-branch=main", remote]);
   git("init", "-q", "-b", "main"); git("config", "user.email", "dev@example.invalid"); git("config", "user.name", "dev");
   git("remote", "add", "origin", remote);
   for (const [p, text] of Object.entries(SPEC)) { mkdirSync(join(dir, p, ".."), { recursive: true }); writeFileSync(join(dir, p), text); }
