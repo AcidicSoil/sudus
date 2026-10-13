@@ -955,7 +955,8 @@ yours. The agent asks you in conversation and records your ruling with
 --body "<your words>"`.
 
 Turning on `inference.enabled` in `.sudus/settings.json` selects exactly
-one named local backend (`verdict`, `jeff` or `kev`) and a loopback-only
+one local inference protocol (`system-one`) or an existing pinned backend
+(`verdict`, `jeff` or `kev`) and a loopback-only
 `/v1/systemone` endpoint. It requires no hosted TypeSafe key; disabled
 settings use the harness's own configured review model, which is
 started the same way `sudus brief` starts the adversary -- with none of the
@@ -983,7 +984,7 @@ exactly as it always prints Waiting and exits 4 instead of sitting there.
 The historical 24-draft Jev benchmark retained under `tests/bench` scored 22 of
 24 against the expected route. The ceiling and weights were chosen on those
 same drafts, so that number is in-sample evidence for the prior Jev source, not
-a result for Verdict, Jeff or Kev. The current `SUDUS_BENCH=1 npm run bench`
+a result for any different model, including Clef. The current `SUDUS_BENCH=1 npm run bench`
 harness runs the explicitly configured local backend and writes a separate
 results directory; unavailable and indeterminate rows are reported separately
 and excluded from route accuracy. Rerun it after any change to the criteria,
@@ -1009,8 +1010,8 @@ bound to the loop. Until then wake names the repair.
 | `adversary_rules` | absent | Optional. One-line rules the machine sets for the adversary, such as a path to stay out of or a file size it should not read. `sudus brief` prints them under Host rules, inside the brief its record digests, so you never edit the brief by hand. |
 | `harness` | `{}` | Per-harness review settings: `harness.<name>.adversary_model` (string or `null`) names the model the adversary subagent runs as in `sudus brief`'s start line, and, with `adversary_transport` (`"local"` or `"remote"`), the reviewer the evaluator's review source starts. |
 | `inference.enabled` | `false` | `true` selects one validated local backend; `false` uses the harness's review model. |
-| `inference.backend` | `null` | Exactly one of `verdict`, `jeff`, `kev` when enabled. No implicit fallback. |
-| `inference.model` | `null` | A pinned backend-prefixed model identifier. Aliases such as `kev-latest` are refused. |
+| `inference.backend` | `null` | `system-one` for any compatible local System One service. The existing `verdict`, `jeff`, and `kev` pinned adapters also remain valid. No implicit fallback. |
+| `inference.model` | `null` | The exact model ID returned by the local service. `system-one` accepts arbitrary model IDs, including `clef-flash`. The legacy pinned adapters still refuse aliases such as `kev-latest`. |
 | `inference.endpoint` | `null` | The local service's HTTP literal-loopback (`127.0.0.1` or `[::1]`) `/v1/systemone` endpoint; credentials, remote hosts, URL query and fragments are refused. |
 | `inference.weights` | 0.2 each | The five dimension weights, summing to 1. |
 | `inference.agent_ceiling` | `0.35` | Composite at or under which the suggestion is `agent`. |
@@ -1026,10 +1027,23 @@ selected local runtime before treating those values as calibrated.
 ### Configure local inference
 
 The normal source remains the review model. For a local backend, start a
-compatible service listening only on loopback, verify its exact pinned model,
-full input capacity, five Score probability distributions and confidence
-semantics, and evaluate representative Sudus-labelled cases first. Merely
-having an endpoint or valid JSON is not evidence of semantic calibration.
+compatible service listening only on loopback. The generic `system-one`
+adapter sends `POST /v1/systemone` and requires a response with the same
+model ID plus five Score distributions. This allows new System One
+models without adding model names or revisions to Sudus's source. Neither
+endpoint nor model-ID equality proves checkpoint provenance or calibration.
+Pin the checkpoint in the service itself, validate full input capacity and
+Score semantics, and test representative Sudus-labelled cases. The existing
+strictly pinned Verdict, Jeff, and Kev adapters remain for old configurations.
+
+For the native Clef server, choose `backend: "system-one"`, model `"clef"`
+or `"clef-flash"`, and endpoint `"http://127.0.0.1:8800/v1/systemone"`.
+A current llama.cpp server supports Clef Flash GGUF through the same
+`/v1/systemone` route. Launch the local GGUF using `llama-server --model
+/path/to/Clef-Flash-Q4_K_M.gguf --alias clef-flash --host 127.0.0.1
+--port 8800 --gpu-layers 99 --ubatch-size 4096`. The selected model must
+actually support System One; a chat-only API cannot produce its distributions.
+Use the same configuration shape for every future compatible model.
 
 The `inference` settings block is shown in the README. Set its `enabled`,
 `backend`, `model` and `endpoint` together, retain the existing policy

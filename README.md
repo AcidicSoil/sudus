@@ -79,7 +79,7 @@ surface). Both go to you.
 | Source | When | What you need |
 |---|---|---|
 | Your harness's review model (default) | `inference.enabled` is `false` | Nothing. `sudus measure --brief` prints the brief; the separate reviewer answers it into a JSON file; `sudus measure <slug> --file <path>` completes the measurement. |
-| Explicitly selected local backend | `inference.enabled` is `true` | One compatible local `/v1/systemone` service, its exact model identifier, and the same five full Score distributions. Supported selections are `verdict`, `jeff`, and `kev` in implementation-priority order, never an automatic fallback chain. |
+| Explicitly selected local backend | `inference.enabled` is `true` | One compatible local `/v1/systemone` service, its exact model identifier, and the same five full Score distributions. Use the generic `system-one` backend for any compatible model. The original pinned `verdict`, `jeff`, and `kev` backends remain available for existing configurations. Sudus never silently falls back to another model. |
 
 Both sources answer the same five questions. Sudus computes the floor,
 veto, composite and advisory suggestion in code; the historical Jev benchmark
@@ -87,20 +87,21 @@ figures below are not evidence of calibration for a new backend.
 
 ### Configure local inference
 
-See the [manual runtime setup](docs/manual.md#pinned-runtime-setup-operators) for pinned source and model revisions.
-Start and validate a local service separately; the manual uses Sudus-owned
-launchers for Verdict, Jeff, and Kev so source/model/runtime identity is checked
-before decision state is sent. Do not enable a backend based only on downloaded
-weights or an endpoint that serves a different model. In
+Start a compatible local System One service before enabling inference.
+The generic adapter submits all five `score` questions through
+`POST /v1/systemone` and rejects a response whose model ID differs from the
+configured ID. It does not verify the loaded checkpoint before sending the
+request or claim its confidence is calibrated. The [manual runtime setup](docs/manual.md#pinned-runtime-setup-operators)
+also documents the original, strictly pinned launchers for Verdict, Jeff, and Kev. In
 `.sudus/settings.json`, replace the default `inference` block with the
 following example (retaining the original weights and policy fields):
 
 ```json
 "inference": {
   "enabled": true,
-  "backend": "jeff",
-  "model": "jeff-gliformer-d0a4e53d",
-  "endpoint": "http://127.0.0.1:8000/v1/systemone",
+  "backend": "system-one",
+  "model": "clef-flash",
+  "endpoint": "http://127.0.0.1:8800/v1/systemone",
   "weights": { "evidence": 0.2, "reach": 0.2, "contract": 0.2, "surface": 0.2, "ambiguity": 0.2 },
   "agent_ceiling": 0.35,
   "confidence_floors": { "evidence": 0, "reach": 0, "contract": 0, "surface": 0, "ambiguity": 0 },
@@ -110,7 +111,21 @@ following example (retaining the original weights and policy fields):
 ```
 
 This is a **configuration illustration, not a ready-to-run deployment**.
-The local service must resolve the same pinned model ID, accept the complete
+It matches the open-source Clef server's model ID and endpoint when that server
+is running `Cloudflare/clef-flash`. Change only `model` and `endpoint` to select
+another compatible model; no Sudus source changes are needed. Recent
+`llama-server` builds serve Clef Flash GGUF through this same System One
+endpoint (requires llama.cpp's decision-model support):
+
+```sh
+llama-server --model /path/to/Clef-Flash-Q4_K_M.gguf \
+  --alias clef-flash --host 127.0.0.1 --port 8800 \
+  --gpu-layers 99 --ubatch-size 4096
+```
+
+Use the downloaded GGUF file directly; no conversion or model-specific Sudus
+adapter is required. A chat-only API does not provide System One scores.
+The local service must resolve the same configured model ID, accept the complete
 state without truncation or unreported abstention, and return probabilities
 for levels 0–4 with a score consistent with their weighted mean. Sudus
 rejects inconsistent results and never tries a second provider. Only exact
@@ -120,7 +135,9 @@ the currently inaccessible Verdict 2.0 checkpoint; neither is silently
 substituted for the other. Jeff is accepted only with `temperature=1` and
 independent question isolation, because its upstream default temperature can
 make `score` differ from the weighted mean of the reported distribution.
-Normalized local responses also record the confidence statistic explicitly:
+The generic adapter records an absent confidence-kind field as `model_reported`,
+which is not a calibrated probability. The pinned adapters retain their
+provider-specific confidence semantics:
 Verdict 151M uses `distribution_concentration`, Jeff uses
 `distribution_peakedness`, and Kev uses `score_confidence`; none is silently
 treated as a calibrated probability of correctness.

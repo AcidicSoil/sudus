@@ -36,7 +36,8 @@ const LOCAL_CHOICES = Object.freeze({
 
 export async function buildLedgerProject({ dir, backend = 'verdict', model, endpoint } = {}) {
   const selected = LOCAL_CHOICES[backend];
-  if (!selected) throw new Error(`benchmark backend ${backend} is not supported`);
+  if (!selected && backend !== 'system-one') throw new Error(`benchmark backend ${backend} is not supported`);
+  if (backend === 'system-one' && (!model || !endpoint)) throw new Error('benchmark system-one backend requires a model and endpoint');
   const project = SCENARIOS.project;
   const cwd = dir ?? mkdtempSync(join(tmpdir(), 'sudus-bench-'));
   sh(cwd, ['init', '-q', '-b', 'main']);
@@ -48,7 +49,7 @@ export async function buildLedgerProject({ dir, backend = 'verdict', model, endp
   const settings = {
     schema: 2, authority_remote: null, outside: ['README.md'], source: ['src/**'], interfaces: [], data: [],
     network_exclude: [], signing_key: null, attribution: 'forbidden', developer: 'present', harness: {},
-    inference: { enabled: true, backend, endpoint: endpoint ?? selected.endpoint, model: model ?? selected.model, weights: dims, agent_ceiling: 0.35, confidence_floors: { evidence: 0, reach: 0, contract: 0, surface: 0, ambiguity: 0 },
+    inference: { enabled: true, backend, endpoint: endpoint ?? selected?.endpoint, model: model ?? selected?.model, weights: dims, agent_ceiling: 0.35, confidence_floors: { evidence: 0, reach: 0, contract: 0, surface: 0, ambiguity: 0 },
       min_calibration_agent_predictions: 60, request_cap_bytes: 48000 },
   };
   write(cwd, '.sudus/settings.json', JSON.stringify(settings, null, 2) + '\n');

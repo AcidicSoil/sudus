@@ -58,3 +58,13 @@ test('benchmark fixture can explicitly select Jeff or Kev without auto fallback'
     assert.equal(settings.inference.endpoint, cfg.endpoint);
   }
 });
+
+
+test('benchmark accepts an arbitrary System One model by configuration alone', async () => {
+  const selected = { backend: 'system-one', model: 'clef-flash', endpoint: 'http://127.0.0.1:8800/v1/systemone' };
+  const p = await buildLedgerProject(selected);
+  const { settings } = await loadSettings(p.dir);
+  assert.equal(settings.inference.backend, selected.backend);
+  assert.equal(settings.inference.model, selected.model);
+  assert.equal(settings.inference.endpoint, selected.endpoint);
+});
