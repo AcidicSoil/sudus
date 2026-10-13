@@ -563,6 +563,14 @@ const realAnswers = {
 };
 
 describe('Score answer parsing', () => {
+  test('accepts a generic System One confidence label and rejects malformed labels', () => {
+    const req = buildScoreRequest(settings(), scoreState(), 0);
+    const body = JSON.parse(goodBody());
+    body.answers.ambiguity.confidence_kind = 'model_reported';
+    assert.equal(parseScoreAnswers(req, JSON.stringify(body)).invalid, undefined);
+    body.answers.ambiguity.confidence_kind = 'bad label with spaces';
+    assert.match(parseScoreAnswers(req, JSON.stringify(body)).invalid, /confidence kind/);
+  });
   test('parses all five dimensions', () => {
     const req = buildScoreRequest(settings(), scoreState(), 0);
     const r = parseScoreAnswers(req, goodBody());
