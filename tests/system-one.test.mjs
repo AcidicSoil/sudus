@@ -44,3 +44,18 @@ test('generic System One refuses a mismatched response model and invalid score o
     fetchImpl: async () => httpJson({model:'clef-flash',answers:{evidence:{score:5}}}) }),
   e => e instanceof InferenceError && e.klass==='invalid');
 });
+
+
+test('registered runtime wake precedes posting decision state, and a startup failure prevents POST', async () => {
+  const order = [];
+  const model='clef-flash';
+  const fetchImpl=async (_url,opts)=>{order.push(opts.method);return httpJson(makeResponse(model));};
+  await post(makeRequest(model),{backend:'system-one',endpoint:url,fetchImpl,
+    runtimeEnsure:async (opts)=>{assert.equal(opts.model,model);assert.equal(opts.endpoint,url);order.push('wake');}});
+  assert.deepEqual(order,['wake','POST']);
+  order.length=0;
+  await assert.rejects(post(makeRequest(model),{backend:'system-one',endpoint:url,fetchImpl,
+    runtimeEnsure:async()=>{order.push('wake');throw new Error('service unavailable');}}),
+    e=>e instanceof InferenceError&&e.klass==='startup');
+  assert.deepEqual(order,['wake']);
+});

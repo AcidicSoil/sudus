@@ -1026,7 +1026,7 @@ selected local runtime before treating those values as calibrated.
 
 ### Configure local inference
 
-The normal source remains the review model. For a local backend, start a
+The normal source remains the review model. For a local backend, run or register a
 compatible service listening only on loopback. The generic `system-one`
 adapter sends `POST /v1/systemone` and requires a response with the same
 model ID plus five Score distributions. This allows new System One
@@ -1041,8 +1041,21 @@ or `"clef-flash"`, and endpoint `"http://127.0.0.1:8800/v1/systemone"`.
 A current llama.cpp server supports Clef Flash GGUF through the same
 `/v1/systemone` route. Launch the local GGUF using `llama-server --model
 /path/to/Clef-Flash-Q4_K_M.gguf --alias clef-flash --host 127.0.0.1
---port 8800 --gpu-layers 99 --ubatch-size 4096`. The selected model must
+--port 8800 --gpu-layers 99 --batch-size 4096 --ubatch-size 4096
+--sleep-idle-seconds 900`. The selected model must
 actually support System One; a chat-only API cannot produce its distributions.
+To start the local service automatically on the first measurement, register
+that endpoint and model in the user-owned `~/.config/sudus/runtimes.json`,
+using the version-1 example in the README. This file is distinct from project
+settings. Sudus launches the exact registered executable without a shell and
+checks readiness and model identity before posting state. llama.cpp handles
+idle unloading itself with `--sleep-idle-seconds 900`, which releases RAM/VRAM
+after 15 minutes and reloads on the next request. Changing models only requires
+another registration and matching project settings; Sudus's code stays the same.
+No registry means that Sudus retains the prior behavior: it does not launch a
+server and connects to the configured loopback endpoint directly. No automatic
+model downloads or fallbacks occur.
+
 Use the same configuration shape for every future compatible model.
 
 The `inference` settings block is shown in the README. Set its `enabled`,

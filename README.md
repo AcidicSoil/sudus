@@ -87,7 +87,8 @@ figures below are not evidence of calibration for a new backend.
 
 ### Configure local inference
 
-Start a compatible local System One service before enabling inference.
+For the generic `system-one` backend, Sudus can start a registered local service
+on its first evaluation. Without a runtime entry, start the service yourself.
 The generic adapter submits all five `score` questions through
 `POST /v1/systemone` and rejects a response whose model ID differs from the
 configured ID. It does not verify the loaded checkpoint before sending the
@@ -120,8 +121,41 @@ endpoint (requires llama.cpp's decision-model support):
 ```sh
 llama-server --model /path/to/Clef-Flash-Q4_K_M.gguf \
   --alias clef-flash --host 127.0.0.1 --port 8800 \
-  --gpu-layers 99 --ubatch-size 4096
+  --gpu-layers 99 --ctx-size 8192 \
+  --batch-size 4096 --ubatch-size 4096 --sleep-idle-seconds 900
 ```
+
+For automatic startup, put a user-owned `~/.config/sudus/runtimes.json` file
+on this machine (permissions `0600`), separate from protected project settings:
+
+```json
+{
+  "version": 1,
+  "runtimes": [
+    {
+      "model": "clef-flash",
+      "endpoint": "http://127.0.0.1:8800/v1/systemone",
+      "executable": "/absolute/path/to/llama-server",
+      "args": ["--model", "/absolute/path/to/Clef-Flash-Q4_K_M.gguf",
+        "--alias", "clef-flash", "--host", "127.0.0.1", "--port", "8800",
+        "--gpu-layers", "99", "--ctx-size", "8192", "--batch-size", "4096",
+        "--ubatch-size", "4096", "--sleep-idle-seconds", "900", "--no-webui"],
+      "startup_timeout_ms": 240000
+    }
+  ]
+}
+```
+
+On the first `sudus measure`, an exact matching model/endpoint entry can launch
+the process once. Sudus waits for readiness, verifies `GET /v1/models`, and
+refuses a mismatched service. Later requests reuse it. Native llama.cpp
+`--sleep-idle-seconds 900` releases its model memory after 15 idle minutes;
+the next score wakes it in the same server process. The timeout is configurable
+per registered runtime. Add more entries for other System One models without
+changing Sudus code. Only user-owned registry commands can launch processes;
+project files cannot specify executables. Sudus never downloads models, launches
+an unregistered model, changes backend, or silently falls back. The service
+remains running but sleeping between uses, until stopped or WSL exits.
 
 Use the downloaded GGUF file directly; no conversion or model-specific Sudus
 adapter is required. A chat-only API does not provide System One scores.

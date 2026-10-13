@@ -1,3 +1,4 @@
+import { ensureRuntime, RuntimeStartError } from '../lib/runtime-startup.mjs';
 import { access, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
@@ -133,7 +134,7 @@ function verify(request, body, backend) {
     if (Math.abs(a.score - mean) > 0.02) invalid('inconsistent_score');
   }
 }
-export async function post(request, { backend, endpoint, fetchImpl = globalThis.fetch, timeoutMs = 60000, hubCache = defaultHubCache() } = {}) {
+export async function post(request, { backend, endpoint, fetchImpl = globalThis.fetch, timeoutMs = 60000, hubCache = defaultHubCache(), runtimeEnsure } = {}) {
   if (!BACKENDS.has(backend) || !loopback(endpoint) || !object(request) ||
     typeof request.model !== 'string' || (backend === 'system-one'
       ? (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(request.model) || request.model.includes('://'))
@@ -141,6 +142,12 @@ export async function post(request, { backend, endpoint, fetchImpl = globalThis.
     DIMENSIONS.some((d) => request.questions[d]?.type !== 'score') ||
     Object.keys(request.questions).length !== 5 ||
     !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300000) throw new InferenceError('config');
+  // A user-owned registry can launch a stopped service. Injected/mock transports are
+  // deliberately untouched. The underlying llama-server handles sleep and automatic reload.
+  if (backend === 'system-one' && (fetchImpl === globalThis.fetch || runtimeEnsure)) {
+    try { await (runtimeEnsure ?? ensureRuntime)({ model: request.model, endpoint }); }
+    catch(e) { throw new InferenceError(e instanceof RuntimeStartError ? e.kind : 'startup'); }
+  }
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
